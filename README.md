@@ -3,7 +3,7 @@
 > **An MCP (Model Context Protocol) server exposing Malawi's weekly financial
 > market data as structured, queryable tools for AI assistants. Built for
 > advisory firms like [Bridgepath Capital](https://www.bridgepathcapitalmw.com)
-> whose analysts use ChatGPT, Claude, and Copilot to answer institutional-grade
+> allowing analysts to use ChatGPT, Claude, and Copilot to answer institutional-grade
 > financial questions over a longitudinal dataset of weekly market updates.**
 
 Built with the **official [.NET MCP C# SDK](https://github.com/modelcontextprotocol/csharp-sdk)**
