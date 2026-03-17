@@ -1,10 +1,11 @@
 # 🇲🇼 Malawi Financial Intelligence — MCP Server
 
-> **An MCP (Model Context Protocol) server exposing Malawi's weekly financial
+> **An MCP (Model Context Protocol) server exposing Malawi's financial
 > market data as structured, queryable tools for AI assistants. Built for
 > advisory firms like [Bridgepath Capital](https://www.bridgepathcapitalmw.com)
 > allowing analysts to use ChatGPT, Claude, and Copilot to answer institutional-grade
-> financial questions over a longitudinal dataset of weekly market updates.**
+> financial questions across weekly market updates, monthly economic reports,
+> and annual budget briefs.**
 
 Built with the **official [.NET MCP C# SDK](https://github.com/modelcontextprotocol/csharp-sdk)**
 (`ModelContextProtocol` v1.1.0), maintained in collaboration with Microsoft.
@@ -13,485 +14,290 @@ Built with the **official [.NET MCP C# SDK](https://github.com/modelcontextproto
 
 ## Table of Contents
 
-- [What Data Is Indexed](#what-data-is-indexed)
+- [Data Sources](#data-sources)
 - [Architecture](#architecture)
-- [The 16 Tools](#the-16-tools)
+- [Ingestion Pipeline](#ingestion-pipeline)
+- [The 20 Tools](#the-20-tools)
   - [Coverage Matrix](#coverage-matrix)
+  - [Statistical Guardrails](#statistical-guardrails)
   - [Honest Gaps](#honest-gaps)
 - [Project Structure](#project-structure)
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
 - [Configuration](#configuration)
-- [Ingestion Pipeline](#ingestion-pipeline)
 - [Running the Server](#running-the-server)
 - [Connecting to AI Clients](#connecting-to-ai-clients)
-  - [ChatGPT](#chatgpt-recommended)
-  - [Claude Desktop](#claude-desktop)
-  - [Claude.ai](#claudeai)
-  - [GitHub Copilot in VS Code](#github-copilot-in-vs-code)
-  - [Cursor](#cursor)
 - [Data Schema](#data-schema)
 - [Contributing](#contributing)
 - [Roadmap](#roadmap)
 
 ---
 
-## What Data Is Indexed
+## Data Sources
 
-**Source**: Bridgepath Capital weekly financial market updates (PDF, every Friday).
-**Cadence**: 52 reports per year.
-**History target**: Full backfill to earliest available report.
+Three complementary document streams from Bridgepath Capital, each serving
+a different analytical purpose:
 
-Each weekly PDF contains four data zones, each handled differently at ingestion:
+| Document | Cadence | Primary Value |
+|---|---|---|
+| **Weekly Market Update** | 52x/year | High-frequency time-series: stock prices, TB auctions, yield curve, FX rates, inflation, market events |
+| **Monthly Economic Report** | 12x/year | Fundamentals: stock valuations (P/E, P/BV, dividend yield, market cap), commodity prices (maize, oil), institutional forecasts, trade data, banking sector metrics |
+| **Annual Budget Brief** | 1x/year | Fiscal policy, sector allocations, expenditure breakdowns, revenue reforms, macroeconomic targets |
 
-| Zone | Pages | Content | Ingestion Method |
-|---|---|---|---|
-| **Narrative** | 1–2 | Market events, policy news, corporate announcements | Docling → BM25 index + entity tagger → `market_events` table |
-| **Equity market** | 3 | MASI/DSI/FSI indices, 16 stock prices, value traded | Docling table extractor → `financial_indicators` |
-| **Govt securities** | 4 | TB auction applied/awarded per tenor, yield curve 8 points | Docling table extractor → `financial_indicators` + `auction_events` |
-| **Appendix** | 5 | 13-month rolling history: FX, inflation, interest rates, yields, returns | Docling structured extractor → TimescaleDB hypertable (~40 rows per PDF) |
+### What Each Source Enables
 
-### Indicators Tracked (Appendix)
+**Weekly alone** answers: *"What happened in the market this week?"*,
+*"Where are T-bill yields?"*, *"Which stocks moved?"*
+
+**Monthly adds**: *"Is AIRTEL expensive relative to its history?"*,
+*"Does oil price predict non-food inflation?"*, *"What do the EIU and
+World Bank project for Malawi's macro environment?"*
+
+**Budget adds**: *"How does the current policy rate compare to the
+budget's 18% target?"*, *"Has development expenditure as a share of
+total budget actually improved?"*
+
+### Indicators Tracked
+
+**Weekly Appendix (time-series, monthly snapshots)**
 
 | Category | Indicators |
 |---|---|
-| **Exchange Rates** | MK/USD, MK/GBP, MK/EUR, MK/ZAR |
-| **FX Reserves** | Total Reserves (USD mn) |
-| **Inflation** | Headline CPI, Food CPI, Non-food CPI |
-| **Interest Rates** | MPR, Interbank Rate (overnight), Lombard Rate, Commercial Bank Reference Rate |
-| **Govt Securities Yields** | 91-day TB, 182-day TB, 364-day TB, 2-yr TN, 3-yr TN, 5-yr TN, 7-yr TN, 10-yr TN |
-| **Equity Index Returns** | MASI YTD, DSI YTD, FSI YTD |
-| **Stock Prices** | AIRTEL, BHL, FDHB, FMBCH, ICON, ILLOVO, MPICO, NBM, NBS, NICO, NITL, OMU, PCL, STANDARD, SUNBIRD, TNM |
+| Exchange Rates | MK/USD, MK/GBP, MK/EUR, MK/ZAR |
+| FX Reserves | Total Reserves (USD mn) |
+| Inflation | Headline CPI, Food CPI, Non-food CPI |
+| Interest Rates | MPR, Interbank Rate, Lombard Rate, Commercial Bank Reference Rate |
+| Govt Securities Yields | 91-day TB, 182-day TB, 364-day TB, 2-yr TN, 3-yr TN, 5-yr TN, 7-yr TN, 10-yr TN |
+| Equity Index Returns | MASI YTD, DSI YTD, FSI YTD |
+
+**Weekly Stock Prices (genuinely weekly observations)**
+
+AIRTEL, BHL, FDHB, FMBCH, ICON, ILLOVO, MPICO, NBM, NBS, NICO, NITL,
+OMU, PCL, STANDARD, SUNBIRD, TNM
+
+**Monthly Appendix 2 (stock valuations, monthly)**
+
+Per stock: P/E ratio, P/BV ratio, dividend yield (%), market
+capitalisation (MK billions)
+
+**Monthly Commodity Prices (monthly)**
+
+IFPRI maize price (MK/kg) — national average + Northern, Central,
+Southern regional breakdown; OPEC reference basket price (USD/barrel)
+
+**Monthly Institutional Forecasts (annual projections)**
+
+EIU, World Bank, Oxford Economics, Government of Malawi projections for:
+GDP growth, inflation (average), interest rates, government balance
+(% GDP), exports/imports (USD bn), current account balance, MK/USD
+exchange rate
 
 ---
 
 ## Architecture
 
 ```
-┌───────────────────────────────────────────────────────────┐
-│                   INGESTION PIPELINE                       │
-│                                                            │
-│  Weekly PDFs (dropped into /data/raw/weekly/)             │
-│       │                                                    │
-│       ├── Docling ──────────► Text chunks (narrative)     │
-│       │                       Tables (prices, yields)      │
-│       │                              │                     │
-│       │   ┌───────────────────────────┼────────────────┐   │
-│       │   ▼                           ▼                │   │
-│       │ BM25 Index             TimescaleDB             │   │
-│       │ + Entity Tagger        financial_indicators     │   │
-│       │ → market_events        auction_events           │   │
-│       │                                                 │   │
-│       └── APScheduler Watcher (auto-ingest on drop) ───┘   │
-└───────────────────────────────────────────────────────────┘
-                        │
-┌───────────────────────────────────────────────────────────┐
-│              .NET MCP SERVER (C#, ASP.NET Core)           │
-│                                                            │
-│  MarketDataTools      SignalTools      EquityTools         │
-│  ─────────────────    ──────────────   ─────────────────   │
-│  GetLatestSnapshot    DetectSignals    GetStockHistory      │
-│  QueryIndicators      ComparePeriods   GetIndexDivergence   │
-│  ComputeRealRate      ComputeSpread    GetLiquidityProfile  │
-│  GetYieldCurve                                             │
-│                                                            │
-│  NarrativeTools            SearchTools (ChatGPT DR)        │
-│  ──────────────────────    ──────────────────────────      │
-│  GetMarketEvents           Search  ← required for          │
-│  SearchByEntity            Fetch   ← Deep Research mode    │
-│  GetCorporateActions                                       │
-│  GetAuctionHistory                                         │
-│                                                            │
-│  Transport: HTTP/HTTPS (production) | stdio (local dev)    │
-└───────────────────────────────────────────────────────────┘
-                        │  MCP protocol (HTTP)
-     ┌──────────────────┼──────────────────┬──────────────┐
-     ▼                  ▼                  ▼              ▼
-  ChatGPT          Claude.ai       GitHub Copilot      Cursor
-  (web + mobile)   (web)           (VS Code)
+╔══════════════════════════════════════════════════════════════════════╗
+║                         DATA SOURCES                                 ║
+║                                                                      ║
+║  Weekly PDFs (52x/year)   Monthly PDFs (12x/year)   Annual Budget   ║
+║         │                        │                       │           ║
+╚═════════╪════════════════════════╪═══════════════════════╪═══════════╝
+          │                        │                       │
+╔═════════╪════════════════════════╪═══════════════════════╪═══════════╗
+║                      INGESTION PIPELINE                              ║
+║                                                                      ║
+║  WeeklyPdfIngester         MonthlyPdfIngester      BudgetIngester    ║
+║  ───────────────────       ─────────────────────   ──────────────    ║
+║  AppendixExtractor         ValuationExtractor       BudgetExtractor  ║
+║  NarrativeExtractor        CommodityExtractor                        ║
+║  AuctionExtractor          ForecastExtractor                         ║
+║  EntityTagger              TradeFlowExtractor                        ║
+║  BM25 index update         MonthlyNarrativeExtractor                 ║
+║                                                                      ║
+║  ──────── APScheduler FileWatcher (auto-ingest on drop) ──────────   ║
+╚══════════════════════════════════════════════════════════════════════╝
+          │
+          ▼
+╔══════════════════════════════════════════════════════════════════════╗
+║                        DATA STORES                                   ║
+║                                                                      ║
+║  TimescaleDB (PostgreSQL)              BM25 Index (in-memory)        ║
+║  ──────────────────────────            ──────────────────────────    ║
+║  financial_indicators (hypertable)     market_events narrative       ║
+║  auction_events                        monthly_narrative             ║
+║  stock_valuations                                                    ║
+║  commodity_prices                                                    ║
+║  institutional_forecasts                                             ║
+║  trade_flows                                                         ║
+║  budget_allocations                                                  ║
+╚══════════════════════════════════════════════════════════════════════╝
+          │
+╔══════════════════════════════════════════════════════════════════════╗
+║                      .NET MCP SERVER                                 ║
+║                                                                      ║
+║  MarketDataTools    SignalTools      EquityTools                     ║
+║  ───────────────    ────────────     ──────────────────              ║
+║  GetLatestSnapshot  DetectSignals    GetStockHistory                 ║
+║  QueryIndicators    ComparePeriods   GetIndexDivergence              ║
+║  ComputeRealRate    ComputeSpread    GetLiquidityProfile             ║
+║  GetYieldCurve                       GetValuationMetrics  ← NEW     ║
+║                                                                      ║
+║  NarrativeTools     CommodityTools   CorrelationTools               ║
+║  ──────────────     ─────────────    ──────────────────             ║
+║  GetMarketEvents    GetCommodity     ComputeCorrelation  ← NEW      ║
+║  SearchByEntity     Prices  ← NEW   ComputeRelative      ← NEW     ║
+║  GetCorporate                         Strength                       ║
+║    Actions                                                           ║
+║  GetAuctionHistory                                                   ║
+║                                                                      ║
+║  SearchTools (ChatGPT Deep Research)                                 ║
+║  ─────────────────────────────────                                   ║
+║  Search    Fetch                                                     ║
+╚══════════════════════════════════════════════════════════════════════╝
+          │  MCP protocol (HTTP)
+    ┌─────┴──────┬──────────────┬──────────┐
+    ▼            ▼              ▼          ▼
+ ChatGPT    Claude.ai    GitHub Copilot  Cursor
 ```
 
 ---
 
-## The 16 Tools
+## Ingestion Pipeline
 
-Tools are grouped into five `[McpServerToolType]` classes. All tools use
-constructor-injected repository/service interfaces — independently testable
-and swappable.
+Three ingesters handle the three document types. All share the same
+`DoclingClient` for PDF parsing, the same TimescaleDB connection, and
+the same BM25 index — they differ only in which extractors they run and
+which tables they write to.
 
-> **Note on `Search` and `Fetch`**: These two tools are required by ChatGPT's
-> Deep Research mode, which is the most powerful way analysts will use this
-> server. Without them, Deep Research rejects the server entirely. They are
-> documented separately in the [SearchTools](#searchtools--chatgpt-deep-research)
-> section below.
+### File Naming & Drop Directories
 
----
+```
+data/raw/
+├── weekly/     bridgepath_market_update_YYYY_MM_DD.pdf
+├── monthly/    bridgepath_monthly_economic_YYYY_MM.pdf
+└── budget/     malawi_budget_brief_YYYY_YY.pdf
+```
 
-### `MarketDataTools` — Core time-series retrieval and computed analytics
+Dates are parsed from filenames and applied as metadata to every record.
 
----
+### Manual Ingestion
 
-#### `GetLatestSnapshot`
-Returns the most recent week's complete snapshot of all ~40 financial
-indicators in a single call.
+```bash
+# Weekly — backfill all historical
+dotnet run -- ingest --type weekly --directory ./data/raw/weekly --backfill
 
-**Returns**: `week_ending` and all indicators grouped by category (exchange
-rates, yields, inflation, interest rates, index returns).
+# Monthly — backfill all historical
+dotnet run -- ingest --type monthly --directory ./data/raw/monthly --backfill
 
-**Typical use**: *"What are current market conditions?"* — the first call
-an AI makes for any context-setting question.
+# Budget — single file
+dotnet run -- ingest --type budget \
+  --file ./data/raw/budget/malawi_budget_brief_2026_27.pdf
+```
 
----
+### Automatic Ingestion
 
-#### `QueryIndicators`
-Raw time-series query for one or more named indicators over a date range.
-The foundational retrieval tool — other computed tools call this internally.
-
-**Parameters**:
-- `indicators` — list of exact indicator names (see full list in
-  [Data Schema](#data-schema))
-- `startDate` — `yyyy-MM-dd`
-- `endDate` — optional, defaults to latest available
-
-**Returns**: Weekly observations per indicator, ordered by date ascending.
-
-**Typical use**: *"Show me the MPR for the last 12 months"*,
-*"What has MK/USD done since June 2025?"*
+When `AutoIngestEnabled: true`, a file watcher monitors all three drop
+directories. Any PDF dropped is automatically classified by type and
+ingested within 60 seconds.
 
 ---
 
-#### `ComputeRealRate`
-Computed tool. Subtracts concurrent inflation from a nominal yield to return
-the real rate of return series. Runs server-side in typed C# — does not
-require the AI to mentally compute the subtraction across two raw series.
+### Weekly PDF Ingestion (`WeeklyPdfIngester`)
 
-**Parameters**:
-- `yieldIndicator` — e.g. `"364-day TB"`, `"5-yr TN"`,
-  `"Commercial Bank Reference Rate"`
-- `inflationMeasure` — `"Headline CPI"` (default), `"Food CPI"`,
-  `"Non-food CPI"`
-- `weeks` — history length, defaults to 52
+Each weekly PDF (6 pages) runs five extractors sequentially:
 
-**Returns**: Weekly series of `{ nominal_rate, inflation, real_rate }`.
+| Stage | Extractor | Source Zone | Output Table |
+|---|---|---|---|
+| 1 | `NarrativeExtractor` | Pages 1–2 (news items) | `market_events` |
+| 2 | `EntityTagger` | Narrative text | JSONB tags on `market_events` |
+| 3 | `AppendixExtractor` | Page 5 (Appendix 1) | `financial_indicators` (~40 rows) |
+| 4 | `AuctionExtractor` | Page 4 (govt securities) | `auction_events` |
+| 5 | BM25 index update | All narrative | In-memory BM25 |
 
-**Typical use**: *"Is the 364-day TB offering a positive real return?"*
-As of 20 Feb 2026: 18% yield minus 24.9% inflation = **−6.9% real rate**.
-
----
-
-#### `GetYieldCurveSnapshot`
-Returns all 8 points of the government securities yield curve (91-day TB
-through 10-year TN) for a given week as a single structured object, with
-automatic curve shape classification.
-
-**Parameters**:
-- `weekEnding` — defaults to latest available
-- `compareToDate` — optional second date; returns both curves side-by-side
-  with basis point differences per tenor
-
-**Shape classifications**: `normal`, `flat`, `inverted`, `humped`.
-
-**Returns**: `{ week_ending, shape, points: [{tenor, yield}], comparison?: [...] }`
-
-**Typical use**: *"Has the yield curve shape changed since last year?"*,
-*"Show me the yield curve as of 6 February 2026 vs 20 February 2026"*
+The `AppendixExtractor` is the most critical stage — it parses the
+40-row × 13-column historical indicators table with full row/column
+header alignment preserved. Numerical precision is enforced at
+<0.01% error tolerance in `AppendixExtractorTests.cs`.
 
 ---
 
-### `SignalTools` — Anomaly detection and period comparison
+### Monthly PDF Ingestion (`MonthlyPdfIngester`)
+
+Each monthly PDF (19 pages) runs five extractors:
+
+| Stage | Extractor | Source Zone | Output Table |
+|---|---|---|---|
+| 1 | `ValuationExtractor` | Appendix 2 (stock valuations) | `stock_valuations` |
+| 2 | `CommodityExtractor` | Section 3 (commodities) | `commodity_prices` |
+| 3 | `ForecastExtractor` | Appendix 4 (EIU projections) | `institutional_forecasts` |
+| 4 | `TradeFlowExtractor` | Narrative (trade data items) | `trade_flows` |
+| 5 | `MonthlyNarrativeExtractor` | Sections 1–3 (analysis) | `market_events` (monthly tag) |
+
+#### `ValuationExtractor` — highest priority stage
+
+Parses Appendix 2 which contains P/E ratio, P/BV ratio, dividend yield,
+and market capitalisation for all 16 MSE equities. This is the
+fundamental data that enables proper investment analysis — previously
+missing from the weekly pipeline entirely.
+
+Example output for one monthly PDF:
+```json
+[
+  { "month": "2026-02", "ticker": "AIRTEL",   "pe_ratio": 29.30, "pbv_ratio": 47.25, "div_yield_pct": 1.8,  "market_cap_mk_bn": 1252 },
+  { "month": "2026-02", "ticker": "FMBCH",    "pe_ratio": 57.04, "pbv_ratio": 14.18, "div_yield_pct": 0.1,  "market_cap_mk_bn": 6745 },
+  { "month": "2026-02", "ticker": "STANDARD", "pe_ratio": 57.58, "pbv_ratio": 29.22, "div_yield_pct": 3.8,  "market_cap_mk_bn": 4973 },
+  ...
+]
+```
+
+#### `CommodityExtractor`
+
+Parses the IFPRI maize price chart (MK/kg national + 3 regions) and
+OPEC reference basket price (USD/barrel). Both series appear as
+annotated charts in the monthly report — DePlot is used to extract the
+data points from chart images before writing to `commodity_prices`.
+
+#### `ForecastExtractor`
+
+Parses the EIU Five-Year Forecast table (Appendix 4). Stores one row
+per institution per indicator per year in `institutional_forecasts`.
+Currently handles EIU; World Bank and Oxford Economics projections
+appear in narrative form and are extracted by
+`MonthlyNarrativeExtractor` as structured text events.
+
+#### `TradeFlowExtractor`
+
+Parses trade balance figures from narrative text — exports (total and
+by commodity), imports (total and by category), export-to-import ratio.
+Closes the trade data gap identified in earlier versions of this system.
 
 ---
 
-#### `DetectMarketSignals`
-Proactively scans the database for significant anomalies without requiring
-an analyst to know what to look for. This is the tool that flags the
-6 Feb 2026 full TB bid rejection as a precursor to the 20 Feb yield
-compression.
+### Budget PDF Ingestion (`BudgetIngester`)
 
-**Parameters**:
-- `startDate` — defaults to 52 weeks ago
-- `signalType` — filter: `"auction_rejection"`, `"masi_move"`,
-  `"yield_shift"`, `"fx_move"`, `"oversubscription"`. Null returns all.
-- `minSeverity` — 1–5 threshold (1 = any movement, 5 = extreme only).
-  Defaults to 2.
+Annual budget briefs are infographic-heavy — ColQwen2 visual embeddings
+are used alongside Docling text extraction to capture chart-based data
+that standard OCR misses.
 
-**Signal types detected**:
-- `auction_rejection` — any week where TB awarded = 0 on any tenor
-- `masi_move` — MASI weekly change exceeds ±5% (configurable)
-- `yield_shift` — any single-tenor yield moves >100bps week-on-week
-- `fx_move` — MK/USD moves >1% in a week
-- `oversubscription` — applied/awarded ratio exceeds 5× on any tenor
-
-**Returns**: Chronological list of `{ date, signal_type, severity,
-indicator, value_before, value_after, delta }`.
-
-**Typical use**: *"What were the significant market stress events in 2025?"*,
-*"Were there early warning signals before the February 2026 yield
-compression?"*
-
----
-
-#### `ComparePeriods`
-Takes any single indicator and two time points or ranges, returns delta,
-percentage change, and trend direction. Handles the entire class of
-"how does X compare to a year ago" questions as a single deterministic call.
-
-**Parameters**:
-- `indicator` — exact indicator name
-- `periodA` — single date `"yyyy-MM-dd"` or range `"yyyy-MM-dd:yyyy-MM-dd"`
-  (range uses period average)
-- `periodB` — same format
-
-**Returns**: `{ period_a_value, period_b_value, absolute_delta, pct_change,
-trend }` where trend is `"improving"`, `"deteriorating"`, or `"stable"`.
-
-**Typical use**: *"How does MASI YTD compare to the same point last year?"*
-
----
-
-#### `ComputeSpread`
-Returns the spread (difference) between two indicators at the same weekly
-time points. Handles spread analysis without requiring the AI to call
-`QueryIndicators` twice and subtract mentally.
-
-Closes three specific analytical gaps:
-- **Monetary policy transmission**: MPR minus Commercial Bank Reference Rate
-- **Inflation divergence**: Food CPI minus Non-food CPI
-- **Term premium**: 10-yr TN yield minus 91-day TB yield
-
-**Parameters**:
-- `indicatorA` — the minuend (e.g. `"Commercial Bank Reference Rate"`)
-- `indicatorB` — the subtrahend (e.g. `"MPR"`)
-- `weeks` — history length, defaults to 52
-- `label` — optional label for the spread in output
-
-**Returns**: Weekly series of `{ week_ending, indicator_a, indicator_b,
-spread, spread_direction }` where `spread_direction` is `"widening"`,
-`"narrowing"`, or `"stable"` relative to prior week.
-
-**Typical use**: *"Is the rate cut transmission happening — is the gap
-between the commercial bank rate and the MPR narrowing?"*
-
----
-
-### `EquityTools` — Malawi Stock Exchange data
-
----
-
-#### `GetStockHistory`
-Closing prices and week-on-week percentage changes for any or all of the
-16 MSE-listed equities over a rolling window.
-
-**Available tickers**: AIRTEL, BHL, FDHB, FMBCH, ICON, ILLOVO, MPICO,
-NBM, NBS, NICO, NITL, OMU, PCL, STANDARD, SUNBIRD, TNM.
-
-**Parameters**:
-- `tickers` — list of symbols; null or empty returns all 16
-- `weeks` — defaults to 8
-
-**Returns**: Per ticker: `{ symbol, closing_price, prior_price,
-week_on_week_pct, week_ending }` ordered by date ascending.
-
-**Typical use**: *"Which stocks declined this week?"*
-
----
-
-#### `GetIndexDivergence`
-Returns MASI, DSI, and FSI year-to-date returns together for a date range,
-with the FSI–MASI spread computed per week.
-
-The FSI reaching 503% YTD in November 2025 while MASI was at 260% is a
-major signal — financial sector stocks massively outperforming the broader
-market. This tool surfaces that pattern directly.
-
-**Parameters**:
-- `startDate` — defaults to start of current calendar year
-- `endDate` — defaults to latest available
-
-**Returns**: Weekly series of `{ week_ending, masi_ytd, dsi_ytd, fsi_ytd,
-fsi_masi_spread, fsi_dsi_spread }`.
-
-**Typical use**: *"Is the financial sector still outperforming the broader
-market?"*
-
----
-
-#### `GetLiquidityProfile`
-Trading volume and market liquidity concentration. In the week ending
-6 Feb 2026, STANDARD alone accounted for 44% of total MSE turnover — a
-significant concentration signal invisible to price-only analysis.
-
-**Parameters**:
-- `weeks` — aggregation window, defaults to 4 (monthly view)
-- `topN` — return top N stocks by volume, defaults to 5
-
-**Returns**: `{ period, total_turnover_mk, top_stocks: [{symbol,
-value_traded, pct_of_total}], concentration_ratio_top3 }`.
-
-**Typical use**: *"Which stocks are actually tradeable right now?"*
-
----
-
-### `NarrativeTools` — Weekly event intelligence
-
----
-
-#### `GetMarketEvents`
-Full-text BM25 search over the numbered narrative items from the
-*"What happened this week"* section of each weekly update.
-
-**Parameters**:
-- `query` — natural language search query
-- `weekEnding` — filter to specific week, optional
-- `maxResults` — defaults to 10
-
-**Returns**: Ranked list of `{ week_ending, item_number, headline,
-full_text, entities, event_type, source_citation }`.
-
-**Typical use**: *"What has been reported about the MOMA power
-interconnector?"*
-
----
-
-#### `SearchByEntity`
-Entity-based lookup using the structured entity tags applied at ingestion.
-More precise than BM25 for known named entities — avoids false positives
-from incidental mentions.
-
-**Parameters**:
-- `entity` — exact entity tag (e.g. `"RBM"`, `"NBM"`, `"World Bank"`,
-  `"Ministry of Finance"`, `"AIRTEL"`)
-- `startDate`, `endDate` — optional date range filters
-
-**Returns**: All narrative items where the entity was explicitly tagged,
-with full text and source citations.
-
-**Typical use**: *"Show me everything reported about the World Bank's
-position on Malawi's fiscal situation in the last 3 months"*
-
----
-
-#### `GetCorporateActions`
-Structured corporate action events filtered by
-`event_type = 'corporate_action'`. More reliable than full-text search
-for portfolio monitoring — tagged at ingestion by type, not found by
-keyword.
-
-**Action types**: `dividend`, `profit_warning`, `earnings_guidance`,
-`rights_issue`, `board_change`.
-
-**Parameters**:
-- `ticker` — filter to specific company; null returns all
-- `weeks` — defaults to 12
-- `actionType` — filter by action type; null returns all
-
-**Returns**: `{ week_ending, company, ticker, action_type, summary,
-source_citation }`.
-
-**Typical use**: *"What dividend announcements have there been this
-quarter?"*, *"Has ILLOVO issued any profit guidance recently?"*
-
----
-
-#### `GetAuctionHistory`
-Treasury Bill auction history: applied vs awarded per tenor,
-oversubscription ratios, full bid rejection flags.
-
-**Parameters**:
-- `tenor` — `"91-day"`, `"182-day"`, `"364-day"`, or null for all
-- `rejectionsOnly` — `true` returns only full rejection weeks
-- `weeks` — defaults to 12
-
-**Returns**: `{ week_ending, tenor, applied_mk_bn, awarded_mk_bn,
-oversubscription_ratio, is_full_rejection }`.
-
-**Typical use**: *"When has the RBM rejected all bids?"*,
-*"What is the trend in TB oversubscription ratios?"*
-
----
-
-### `SearchTools` — ChatGPT Deep Research
-
-These two tools exist specifically to satisfy ChatGPT's Deep Research
-mode requirements. Deep Research rejects any MCP server that does not
-expose both a `search` and a `fetch` tool. In Deep Research, only these
-two tools are called — the AI uses them to systematically retrieve and
-synthesise information across multiple queries.
-
-If you are only using Claude or Copilot, these tools are not required
-but do no harm.
-
----
-
-#### `Search`
-Entry point for Deep Research queries. Accepts a natural language query
-and returns matching record IDs from both the `financial_indicators`
-time-series and `market_events` narrative datasets.
-
-**Parameters**:
-- `query` — natural language search query
-
-**Returns**: `{ ids: [string] }` — a list of record identifiers that
-Deep Research will then retrieve individually using `Fetch`.
-
-**Note**: The `ids` format encodes the source type and primary key:
-e.g. `"indicator:MK/USD:2026-02-20"` or `"event:uuid-here"`.
-
----
-
-#### `Fetch`
-Retrieves a complete record by ID. Called by Deep Research after `Search`
-to get full content for each matching result.
-
-**Parameters**:
-- `id` — a record identifier as returned by `Search`
-
-**Returns**: Full record content including all fields, metadata, and
-source citation. Format varies by record type (indicator vs event).
-
-**Typical Deep Research use**: *"Compile a comprehensive analysis of
-Malawi's monetary policy stance over the last 12 months, including TB
-auction behaviour, yield movements, and relevant policy announcements."*
-
----
-
-### Coverage Matrix
-
-| Analyst Question | Primary Tool(s) | Coverage |
+| Stage | Extractor | Output Table |
 |---|---|---|
-| Yield curve movement over 8 weeks | `GetYieldCurveSnapshot` | ✅ Full |
-| TB bid rejections + consequences | `GetAuctionHistory` + `DetectMarketSignals` | ✅ Full |
-| Real rate of return on T-bills | `ComputeRealRate` | ✅ Full |
-| MPR transmission to bank lending rates | `ComputeSpread` | ✅ Full |
-| TB application volume trend | `GetAuctionHistory` | ✅ Full |
-| Stock cumulative declines over N weeks | `GetStockHistory` + `ComparePeriods` | ✅ Full |
-| MASI YTD vs prior year same week | `GetIndexDivergence` + `ComparePeriods` | ✅ Full |
-| Most consistently traded stock | `GetLiquidityProfile` | ✅ Full |
-| FSI vs MASI vs DSI divergence | `GetIndexDivergence` | ✅ Full |
-| MK/USD stability and managed float signals | `QueryIndicators` + `DetectMarketSignals` | ✅ Full |
-| Food vs non-food inflation divergence | `ComputeSpread` | ✅ Full |
-| Economic events this week | `GetMarketEvents` | ✅ Full |
-| Corporate announcements last N weeks | `GetCorporateActions` | ✅ Full |
-| Trade/energy/infrastructure news | `GetMarketEvents` + `SearchByEntity` | ✅ Full |
-| Cross-reference news with market data | `GetMarketEvents` → `QueryIndicators` | ✅ Full |
-| TB oversubscription ratio trend | `GetAuctionHistory` | ✅ Full |
-| Term premium (short vs long yield) | `ComputeSpread` | ✅ Full |
-| Stress events + same-week stock moves | `DetectMarketSignals` + `GetStockHistory` | ✅ Full |
-| Comprehensive multi-question research | `Search` + `Fetch` (Deep Research) | ✅ Full |
+| 1 | `DoclingClient` | Text chunks |
+| 2 | `ColQwen2Embedder` | Visual page vectors → Qdrant |
+| 3 | `BudgetExtractor` | `budget_allocations` |
 
-**Coverage: ~90–92% of typical analyst questions.**
+> ⚠️ The budget pipeline is the only one that requires Qdrant. Weekly
+> and monthly pipelines write entirely to TimescaleDB and the BM25 index.
+> Qdrant is optional for deployments that only need weekly + monthly data.
 
 ---
 
-### Honest Gaps
+## Documentation
 
-Two question types are not covered — this is an ingestion problem, not a
-tool problem. The weekly Appendix table does not include trade balance data.
-
-| Question | Gap | Resolution |
-|---|---|---|
-| *"What % of imports does tobacco export revenue cover?"* | Export/import commodity breakdown is in narrative text only — not structured | Add `TradeBalanceExtractor` to ingestion + `GetTradeBalance` tool (v0.4) |
-| *"What is the FX reserve import cover in months?"* | Monthly import totals not in Appendix (FX reserves are) | Same: `trade_flows` table + tool (v0.4) |
+| Document | Contents |
+|---|---|
+| [MCP.md](./MCP.md) | All 22 MCP tool definitions, coverage matrix, statistical guardrails, data schema |
+| [REST.md](./REST.md) | REST API endpoints, request/response shapes, dashboard integration, auth |
 
 ---
 
@@ -501,19 +307,23 @@ tool problem. The weekly Appendix table does not include trade balance data.
 MalawiFinancialMcp/
 │
 ├── MalawiFinancialMcp.csproj
-│
-├── Program.cs                          # Host builder, DI wiring, app.MapMcp()
+├── Program.cs
 │
 ├── Tools/
-│   ├── MarketDataTools.cs             # GetLatestSnapshot, QueryIndicators,
-│   │                                  # ComputeRealRate, GetYieldCurveSnapshot
-│   ├── SignalTools.cs                 # DetectMarketSignals, ComparePeriods,
-│   │                                  # ComputeSpread
-│   ├── EquityTools.cs                 # GetStockHistory, GetIndexDivergence,
-│   │                                  # GetLiquidityProfile
-│   ├── NarrativeTools.cs             # GetMarketEvents, SearchByEntity,
-│   │                                  # GetCorporateActions, GetAuctionHistory
-│   └── SearchTools.cs                # Search, Fetch (ChatGPT Deep Research)
+│   ├── MarketDataTools.cs         # GetLatestSnapshot, QueryIndicators,
+│   │                              # ComputeRealRate, GetYieldCurveSnapshot
+│   ├── SignalTools.cs             # DetectMarketSignals, ComparePeriods,
+│   │                              # ComputeSpread
+│   ├── EquityTools.cs             # GetStockHistory, GetIndexDivergence,
+│   │                              # GetLiquidityProfile, GetValuationMetrics
+│   ├── CommodityTools.cs          # GetCommodityPrices
+│   ├── CorrelationTools.cs        # ComputeCorrelation,
+│   │                              # ComputeRelativeStrength
+│   ├── NarrativeTools.cs          # GetMarketEvents, SearchByEntity,
+│   │                              # GetCorporateActions, GetAuctionHistory
+│   ├── BankingTools.cs            # GetBankingSectorMetrics
+│   ├── TradeTools.cs              # GetTradeBalance
+│   └── SearchTools.cs             # Search, Fetch (ChatGPT Deep Research)
 │
 ├── Data/
 │   ├── MalawiDbContext.cs
@@ -523,29 +333,55 @@ MalawiFinancialMcp/
 │   │   ├── IMarketEventRepository.cs
 │   │   ├── MarketEventRepository.cs
 │   │   ├── IAuctionRepository.cs
-│   │   └── AuctionRepository.cs
+│   │   ├── AuctionRepository.cs
+│   │   ├── IValuationRepository.cs     # New — stock_valuations
+│   │   ├── ValuationRepository.cs
+│   │   ├── ICommodityRepository.cs     # New — commodity_prices
+│   │   ├── CommodityRepository.cs
+│   │   ├── IForecastRepository.cs      # New — institutional_forecasts
+│   │   ├── ForecastRepository.cs
+│   │   ├── IBankingRepository.cs       # New — banking_metrics
+│   │   ├── BankingRepository.cs
+│   │   ├── ITradeRepository.cs         # New — trade_flows
+│   │   └── TradeRepository.cs
 │   └── Models/
 │       ├── FinancialIndicator.cs
 │       ├── MarketEvent.cs
-│       └── AuctionEvent.cs
+│       ├── AuctionEvent.cs
+│       ├── StockValuation.cs           # New
+│       ├── CommodityPrice.cs           # New
+│       ├── InstitutionalForecast.cs    # New
+│       ├── BankingMetric.cs             # New
+│       └── TradeFlow.cs                # New
 │
 ├── Services/
 │   ├── ISignalDetector.cs
 │   ├── SignalDetector.cs
 │   ├── INarrativeSearchService.cs
-│   └── BM25NarrativeSearchService.cs
+│   ├── BM25NarrativeSearchService.cs
+│   ├── ICorrelationService.cs          # New
+│   └── CorrelationService.cs           # New — Pearson/Spearman + guardrails
 │
 ├── Ingestion/
 │   ├── WeeklyPdfIngester.cs
+│   ├── MonthlyPdfIngester.cs           # New
+│   ├── BudgetIngester.cs               # New
 │   ├── DoclingClient.cs
 │   ├── AppendixExtractor.cs
 │   ├── NarrativeExtractor.cs
 │   ├── EntityTagger.cs
 │   ├── AuctionExtractor.cs
+│   ├── ValuationExtractor.cs           # New — Appendix 2 parser
+│   ├── CommodityExtractor.cs           # New — maize + oil charts via DePlot
+│   ├── ForecastExtractor.cs            # New — EIU table parser
+│   ├── TradeFlowExtractor.cs           # New — trade data from narrative
+│   ├── MonthlyNarrativeExtractor.cs    # New — monthly analysis sections
+│   ├── ColQwen2Embedder.cs             # New — for budget visual embeddings
 │   └── FileWatcher.cs
 │
 ├── Migrations/
-│   └── 001_InitSchema.sql
+│   ├── 001_InitSchema.sql
+│   └── 002_AddMonthlyTables.sql        # New
 │
 ├── Tests/
 │   MalawiFinancialMcp.Tests/
@@ -553,17 +389,36 @@ MalawiFinancialMcp/
 │   │   ├── MarketDataToolsTests.cs
 │   │   ├── SignalToolsTests.cs
 │   │   ├── EquityToolsTests.cs
+│   │   ├── CommodityToolsTests.cs      # New
+│   │   ├── CorrelationToolsTests.cs    # New — guardrail validation critical
 │   │   ├── NarrativeToolsTests.cs
 │   │   └── SearchToolsTests.cs
 │   ├── Ingestion/
-│   │   ├── AppendixExtractorTests.cs  # Critical: numerical precision
+│   │   ├── AppendixExtractorTests.cs
+│   │   ├── ValuationExtractorTests.cs  # New — P/E precision tests
+│   │   ├── CommodityExtractorTests.cs  # New
 │   │   └── EntityTaggerTests.cs
-│   └── Repositories/
-│       └── IndicatorRepositoryTests.cs
+│   └── Services/
+│       └── CorrelationServiceTests.cs  # New — statistical logic tests
 │
+├── MalawiFinancialApi/              ← REST API for dashboard
+│   ├── MalawiFinancialApi.csproj
+│   ├── Program.cs
+│   ├── Controllers/
+│   │   ├── SnapshotController.cs
+│   │   ├── EquitiesController.cs
+│   │   ├── YieldsController.cs
+│   │   ├── FxController.cs
+│   │   ├── RatesController.cs
+│   │   ├── MacroController.cs
+│   │   ├── CommoditiesController.cs
+│   │   ├── BankingController.cs
+│   │   ├── TradeController.cs
+│   │   └── IndicesController.cs
+│   └── DTOs/
+│       └── ...
 ├── docker-compose.yml
 ├── appsettings.json
-├── appsettings.Development.json
 └── README.md
 ```
 
@@ -571,40 +426,22 @@ MalawiFinancialMcp/
 
 ## Prerequisites
 
-- [.NET 9 SDK](https://dotnet.microsoft.com/download) or later
-- [Docker](https://www.docker.com/) and Docker Compose
-- A running [Docling](https://github.com/DS4SD/docling) instance
-  (included in `docker-compose.yml`)
+- [.NET 9 SDK](https://dotnet.microsoft.com/download)
+- Docker and Docker Compose
+- A running Docling instance (included in `docker-compose.yml`)
+- Qdrant (only required if ingesting budget PDFs — optional)
 
 ---
 
 ## Installation
 
-### 1. Clone
-
 ```bash
 git clone https://github.com/your-org/malawi-financial-mcp.git
 cd malawi-financial-mcp
-```
-
-### 2. Start Docker Services
-
-```bash
 docker compose up -d
-```
-
-Starts **TimescaleDB** on `:5432` and **Docling** on `:8080`.
-
-### 3. Initialise Database
-
-```bash
 psql postgresql://postgres:malawi_agent@localhost:5432/malawi_financial \
-  -f Migrations/001_InitSchema.sql
-```
-
-### 4. Build
-
-```bash
+  -f Migrations/001_InitSchema.sql \
+  -f Migrations/002_AddMonthlyTables.sql
 dotnet restore && dotnet build
 ```
 
@@ -613,16 +450,15 @@ dotnet restore && dotnet build
 ## Configuration
 
 ```json
-// appsettings.json
 {
   "ConnectionStrings": {
     "TimescaleDB": "Host=localhost;Port=5432;Database=malawi_financial;Username=postgres;Password=malawi_agent"
   },
-  "Docling": {
-    "BaseUrl": "http://localhost:8080"
-  },
+  "Docling": { "BaseUrl": "http://localhost:8080" },
   "Ingestion": {
-    "WatchDirectory": "./data/raw/weekly",
+    "WeeklyWatchDirectory":  "./data/raw/weekly",
+    "MonthlyWatchDirectory": "./data/raw/monthly",
+    "BudgetWatchDirectory":  "./data/raw/budget",
     "AutoIngestEnabled": true
   },
   "SignalDetector": {
@@ -630,194 +466,97 @@ dotnet restore && dotnet build
     "YieldShiftThresholdBps": 100,
     "FxMoveThresholdPct": 1.0,
     "OversubscriptionThreshold": 5.0
+  },
+  "Correlation": {
+    "MinObservations": 15,
+    "NearZeroVarianceThreshold": 0.001,
+    "SignificanceLevel": 0.05
   }
 }
 ```
 
 ---
 
-## Ingestion Pipeline
-
-### File Naming Convention
-
-```
-bridgepath_market_update_YYYY_MM_DD.pdf
-```
-
-Drop files into `./data/raw/weekly/`. The `week_ending` date is parsed
-from the filename and applied to every record written.
-
-### Manual Ingestion
-
-```bash
-# Single file
-dotnet run -- ingest --file ./data/raw/weekly/bridgepath_market_update_2026_02_20.pdf
-
-# Full backfill
-dotnet run -- ingest --directory ./data/raw/weekly --backfill
-```
-
-### Automatic Ingestion
-
-When `AutoIngestEnabled: true`, any PDF dropped into the watch directory
-is automatically ingested within 60 seconds.
-
-### Ingestion Stages
-
-| Stage | Class | Input | Output |
-|---|---|---|---|
-| 1. Parse | `DoclingClient` | PDF bytes | Structured JSON |
-| 2. Extract narrative | `NarrativeExtractor` | Pages 1–2 | `market_events` rows |
-| 3. Tag entities | `EntityTagger` | Narrative text | JSONB tags on each event |
-| 4. Extract Appendix | `AppendixExtractor` | Page 5 | `financial_indicators` rows (~40) |
-| 5. Extract auction data | `AuctionExtractor` | Page 4 | `auction_events` rows |
-| 6. Extract equity data | `AppendixExtractor` | Page 3 + Appendix | `financial_indicators` rows |
-| 7. Build BM25 index | `BM25NarrativeSearchService` | `market_events` table | In-memory BM25 (rebuilt on startup) |
-
-> ⚠️ **Numerical precision is critical.** `AppendixExtractorTests.cs`
-> enforces a <0.01% error tolerance on all extracted values.
-
----
-
 ## Running the Server
 
-### stdio (local development)
-
 ```bash
+# stdio (local dev — Claude Desktop)
 dotnet run -- --transport stdio
-```
 
-### HTTP (production)
-
-```bash
+# HTTP (production — Claude.ai, ChatGPT, Copilot)
 dotnet run -- --transport http --port 5000
 ```
 
-For production deployments, the server must be reachable over **HTTPS**.
-Use a reverse proxy (nginx, Caddy) or deploy to a cloud service that
-provides TLS termination.
-
-For local development exposed to the internet (required for ChatGPT
-and Claude.ai testing), use [ngrok](https://ngrok.com/) or
-[Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/):
+For ChatGPT and Claude.ai the server must be reachable over HTTPS.
+Use [ngrok](https://ngrok.com/) or [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/)
+for local development:
 
 ```bash
-# Expose local server to the internet for testing
 ngrok http 5000
-# → Forwarding: https://abc123.ngrok.app → localhost:5000
-
-# or with Cloudflare Tunnel
-cloudflared tunnel --url http://localhost:5000
+# → https://abc123.ngrok.app → localhost:5000
 ```
 
 ---
 
 ## Connecting to AI Clients
 
-The server runs on HTTP transport and works with any MCP-compatible client.
-Your public endpoint will be `https://your-server/mcp`.
-
----
-
 ### ChatGPT (Recommended)
 
-ChatGPT is the primary intended client and supports the server in two modes:
+Supports two modes — **Chat** (all 20 tools) and **Deep Research**
+(`Search` + `Fetch` only, for comprehensive multi-step analysis).
 
-**Chat Mode** — interactive Q&A using all 16 tools.
+**Requirements**: ChatGPT Pro, Team, Enterprise, or Education plan;
+Developer Mode enabled; server accessible over HTTPS.
 
-**Deep Research Mode** — systematic multi-step research using the `Search`
-and `Fetch` tools. This is the highest-value mode for analysts compiling
-comprehensive briefings across multiple weeks of data.
-
-#### Requirements
-
-- ChatGPT **Pro, Team, Enterprise, or Education** plan
-- Developer Mode enabled (Settings → Connectors → Advanced → Developer Mode)
-- Server accessible over **HTTPS**
-
-#### Setup
-
-1. Ensure your server is running and reachable over HTTPS
-2. In ChatGPT, go to **Settings → Connectors → Create**
-3. Fill in the connector form:
+1. Go to **Settings → Connectors → Advanced → Enable Developer Mode**
+2. Go to **Settings → Connectors → Create**
+3. Fill in:
    - **Name**: Malawi Financial Intelligence
-   - **Description**: Weekly financial market data for Malawi — yields,
-     FX rates, equity prices, inflation, and market events
+   - **Description**: Weekly and monthly Malawi financial market data —
+     equity prices, valuations, yields, FX, inflation, commodity prices,
+     and market events
    - **Connector URL**: `https://your-server/mcp`
-4. Click **Create** — ChatGPT will display the list of available tools
-   if the connection succeeds
-5. To use in chat: click the **+** icon in the message bar → **More** →
-   **Developer Mode** → enable your connector
+4. Click **Create** — ChatGPT lists all 20 available tools
+5. To use in chat: **+** → **More** → **Developer Mode** → enable
+   connector
 
-#### Deep Research
+For Deep Research: start a prompt with *"Use deep research to..."*
 
-In a new chat, start a message with *"Use deep research to..."* and
-ChatGPT will use the `Search` and `Fetch` tools to compile a
-comprehensive, cited analysis. Example:
-
-> *"Use deep research to compile a briefing on Malawi's monetary policy
-> stance over the last 12 months, including TB auction behaviour, yield
-> movements, and relevant RBM policy announcements."*
-
-#### Refreshing Tools
-
-After updating tool definitions or descriptions, go to
-**Settings → Connectors**, click your connector, and select **Refresh**
-to pull the updated tool list.
+After updating tool definitions, refresh via
+**Settings → Connectors → [your connector] → Refresh**.
 
 ---
 
 ### Claude Desktop
 
-For local use on macOS or Windows.
-
-1. Run the server in stdio mode (no HTTPS required):
-
-```bash
-dotnet run -- --transport stdio
-```
-
-2. Edit `claude_desktop_config.json`:
-   - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-   - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-
 ```json
+// ~/Library/Application Support/Claude/claude_desktop_config.json
 {
   "mcpServers": {
     "malawi-financial": {
       "command": "dotnet",
-      "args": [
-        "run",
-        "--project",
-        "/absolute/path/to/MalawiFinancialMcp",
-        "--",
-        "--transport",
-        "stdio"
-      ]
+      "args": ["run", "--project", "/path/to/MalawiFinancialMcp",
+               "--", "--transport", "stdio"]
     }
   }
 }
 ```
 
-3. Restart Claude Desktop — the tools will appear automatically.
+Restart Claude Desktop — tools appear automatically.
 
 ---
 
 ### Claude.ai
 
-For web-based use via Claude.ai (requires a published HTTPS endpoint).
-
-1. Go to **Claude.ai → Settings → Integrations → Add MCP Server**
-2. Enter your server URL: `https://your-server/mcp`
-3. The tools will be available in any new conversation
+**Settings → Integrations → Add MCP Server** →
+enter `https://your-server/mcp`
 
 ---
 
 ### GitHub Copilot in VS Code
 
-1. Open (or create) `.vscode/mcp.json` in your project:
-
 ```json
+// .vscode/mcp.json
 {
   "servers": {
     "malawi-financial": {
@@ -828,20 +567,15 @@ For web-based use via Claude.ai (requires a published HTTPS endpoint).
 }
 ```
 
-2. A **Start** button appears at the top of the file — click it to
-   connect
-3. Open Copilot Chat (`Ctrl+Alt+I`), switch to **Agent Mode**, and click
-   the tools icon to verify the server is listed
-4. Use tools directly in chat: `#GetLatestSnapshot` or just ask naturally
+Click **Start** in the file → open Copilot Chat → **Agent Mode** →
+verify server appears in tools list.
 
 ---
 
 ### Cursor
 
-Cursor uses the same configuration format as VS Code. Add to
-`~/.cursor/mcp.json` (user-wide) or `.cursor/mcp.json` (project-level):
-
 ```json
+// ~/.cursor/mcp.json
 {
   "mcpServers": {
     "malawi-financial": {
@@ -852,108 +586,39 @@ Cursor uses the same configuration format as VS Code. Add to
 }
 ```
 
-Restart Cursor — tools appear automatically in the Composer and Chat.
-
 ---
 
-## Data Schema
 
-### `financial_indicators` (TimescaleDB hypertable)
-
-| Column | Type | Notes |
-|---|---|---|
-| `time` | `TIMESTAMPTZ` | Hypertable partition key |
-| `week_ending` | `DATE` | Source week |
-| `category` | `TEXT` | `exchange_rate`, `yield`, `inflation`, `interest_rate`, `stock_price`, `stock_return`, `volume`, `reserve` |
-| `indicator` | `TEXT` | Exact indicator name |
-| `value` | `NUMERIC(18,6)` | Preserves decimal precision |
-| `prior_value` | `NUMERIC(18,6)` | Auto-populated from prior week on insert |
-| `week_delta` | `NUMERIC(18,6)` | `value - prior_value` |
-| `source_doc` | `TEXT` | Source PDF filename |
-
-### `market_events`
-
-| Column | Type | Notes |
-|---|---|---|
-| `id` | `UUID` | Primary key |
-| `week_ending` | `DATE` | |
-| `item_number` | `INT` | Position in the weekly list |
-| `headline` | `TEXT` | Auto-extracted first sentence |
-| `full_text` | `TEXT` | Complete narrative item |
-| `entities` | `JSONB` | `{ tickers: [], institutions: [], ministries: [], event_type: "" }` |
-| `event_type` | `TEXT` | `corporate_action`, `policy`, `macro`, `infrastructure`, `trade`, `health`, `social` |
-| `source_citation` | `TEXT` | e.g. `"The Nation, 20 February 2026"` |
-
-### `auction_events`
-
-| Column | Type | Notes |
-|---|---|---|
-| `week_ending` | `DATE` | |
-| `tenor` | `TEXT` | `"91-day"`, `"182-day"`, `"364-day"` |
-| `applied_mk_bn` | `NUMERIC` | Total bids received |
-| `awarded_mk_bn` | `NUMERIC` | Total awarded (0 = full rejection) |
-| `oversubscription_ratio` | `NUMERIC` | `applied / awarded`; NULL if awarded = 0 |
-| `is_full_rejection` | `BOOLEAN` | `awarded_mk_bn = 0` |
-
----
-
-## Contributing
-
-```bash
-dotnet restore
-dotnet test
-```
-
-### Contribution Areas
-
-| Area | Description | Priority |
-|---|---|---|
-| **Historical backfill** | Ingest all available historical weekly PDFs | High |
-| **`AppendixExtractor` hardening** | Edge cases: N/A values, merged cells, footnotes | High |
-| **Entity tagger expansion** | Add more institution/ministry entity tags | Medium |
-| **`TradeBalanceExtractor`** | Parse trade data from narrative → `trade_flows` table | Medium |
-| **`GetTradeBalance` tool** | New tool over `trade_flows` (closes known coverage gaps) | Medium |
-| **Signal threshold tuning** | Calibrate `DetectMarketSignals` against historical data | Medium |
-| **BM25 index persistence** | Currently rebuilt on startup; persist to disk | Low |
-
-### Commit Convention
-
-```
-feat(tools): add ComputeSpread for transmission gap analysis
-fix(ingestion): handle N/A values in AppendixExtractor
-data(weekly): backfill market updates Jan 2024–Feb 2026
-test(tools): add precision tests for ComputeRealRate
-```
-
-### Pull Request Checklist
-
-- [ ] `dotnet test` passes
-- [ ] `AppendixExtractorTests` pass with <0.01% numerical error tolerance
-- [ ] Tool `[Description]` attributes are complete and accurate —
-  AI clients use these to decide which tool to call
-- [ ] New tools have a corresponding repository interface + mock
-- [ ] `CHANGELOG.md` updated
+- [.NET 9 SDK](https://dotnet.microsoft.com/download)
+- Docker and Docker Compose
+- A running Docling instance (included in `docker-compose.yml`)
+- Qdrant (only required if ingesting budget PDFs — optional)
 
 ---
 
 ## Roadmap
 
-- [ ] **v0.1** — 16 tools + TimescaleDB schema + manual ingestion CLI
+- [ ] **v0.1** — 16 tools (weekly only) + TimescaleDB + manual CLI
 - [ ] **v0.2** — File watcher auto-ingestion + entity tagger
-- [ ] **v0.3** — Historical backfill of all available weekly PDFs
-- [ ] **v0.4** — `TradeBalanceExtractor` + `GetTradeBalance` tool
-- [ ] **v0.5** — HTTPS deployment guide + OAuth for ChatGPT
-- [ ] **v1.0** — Production hardening: auth, rate limiting,
-  TimescaleDB replication
+- [ ] **v0.3** — Monthly ingestion pipeline + 22 tools
+  (GetValuationMetrics, GetCommodityPrices, ComputeCorrelation,
+  ComputeRelativeStrength, GetBankingSectorMetrics, GetTradeBalance)
+- [ ] **v0.4** — REST API layer (9 endpoints) powering the React dashboard
+- [ ] **v0.5** — React dashboard live data integration (replace static arrays)
+- [ ] **v0.6** — Historical backfill: all weekly + monthly PDFs
+- [ ] **v0.7** — Budget ingestion pipeline + ColQwen2 visual embeddings
+- [ ] **v0.8** — HTTPS deployment + ChatGPT OAuth
+- [ ] **v0.9** — Sector taxonomy + peer group analysis tools
+- [ ] **v1.0** — Production hardening: auth, rate limiting, replication
 
 ---
 
 ## Acknowledgements
 
-- [Bridgepath Capital](https://www.bridgepathcapitalmw.com) for weekly
-  research publications
+- [Bridgepath Capital](https://www.bridgepathcapitalmw.com) for
+  weekly and monthly research publications
 - [modelcontextprotocol/csharp-sdk](https://github.com/modelcontextprotocol/csharp-sdk)
-  — official C# MCP SDK, maintained in collaboration with Microsoft
+  — official C# SDK, maintained in collaboration with Microsoft
 - [Docling](https://github.com/DS4SD/docling) by IBM Research
 - [TimescaleDB](https://www.timescale.com/)
 
@@ -966,4 +631,5 @@ MIT — see [LICENSE](./LICENSE) for details.
 > **Disclaimer**: For analytical and research purposes only. All outputs
 > should be independently verified before use in investment or advisory
 > decisions. Data sourced from Malawi Government, Reserve Bank of Malawi,
-> Malawi Stock Exchange, and Bridgepath Capital publications.
+> Malawi Stock Exchange, IFPRI, OPEC, EIU, World Bank, and Bridgepath
+> Capital publications.
