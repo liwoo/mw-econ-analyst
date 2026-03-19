@@ -1,0 +1,3064 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Malawi Financial Intelligence API",
+    "version": "1.4.0",
+    "description": "REST API for the Malawi Financial Intelligence platform. 20 endpoints covering equities, fixed income, FX, macro, commodities (17 tracked), tobacco intelligence (AHL + TIMB + USDA), real estate yields, and the cross-asset yield comparison matrix. Tier-based access: Free / Professional / Institutional / Enterprise. MCP equivalent tools documented in MCP.md.",
+    "contact": {
+      "name": "Bridgepath Capital",
+      "url": "https://www.bridgepathcapitalmw.com",
+      "email": "info@bridgepathcapitalmw.com"
+    },
+    "license": {
+      "name": "MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://your-server.com/api/v1",
+      "description": "Production"
+    },
+    {
+      "url": "http://localhost:5001/api/v1",
+      "description": "Local development"
+    }
+  ],
+  "security": [
+    {
+      "ApiKeyAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Snapshot",
+      "description": "KPI strip \u2014 latest values across all indicators"
+    },
+    {
+      "name": "Equities",
+      "description": "MSE stock prices, valuations, and liquidity"
+    },
+    {
+      "name": "Yields",
+      "description": "Government securities yield curve and TB auctions"
+    },
+    {
+      "name": "FX",
+      "description": "Foreign exchange rates"
+    },
+    {
+      "name": "Rates",
+      "description": "Interest rates and real rate calculations"
+    },
+    {
+      "name": "Macro",
+      "description": "Macroeconomic indicators \u2014 inflation, GDP, fiscal, reserves"
+    },
+    {
+      "name": "Commodities",
+      "description": "Maize prices (national + regional) and oil price"
+    },
+    {
+      "name": "Banking",
+      "description": "Banking sector health metrics"
+    },
+    {
+      "name": "Trade",
+      "description": "Trade balance \u2014 exports, imports, commodity breakdown"
+    },
+    {
+      "name": "Indices",
+      "description": "MASI, DSI, and FSI YTD return divergence"
+    },
+    {
+      "name": "Forecasts",
+      "description": "Per-institution macro projections \u2014 GDP, CPI, FX"
+    },
+    {
+      "name": "RealEstate",
+      "description": "Real estate rental prices, implied yields, and cross-asset yield comparison"
+    }
+  ],
+  "paths": {
+    "/snapshot": {
+      "get": {
+        "tags": [
+          "Snapshot"
+        ],
+        "summary": "Latest market snapshot",
+        "description": "Returns the most recent week's complete indicator snapshot used to populate the dashboard KPI strip. Equivalent to MCP `GetLatestSnapshot`.",
+        "operationId": "getSnapshot",
+        "responses": {
+          "200": {
+            "description": "Latest weekly snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Snapshot"
+                },
+                "example": {
+                  "week_ending": "2026-02-28",
+                  "masi": {
+                    "value": 574680,
+                    "ytd_pct": -3.91,
+                    "prior_year_ytd_pct": 64.92
+                  },
+                  "cpi": {
+                    "headline": 24.9,
+                    "food": 22.1,
+                    "non_food": 29.8
+                  },
+                  "mpr": 26.0,
+                  "tb_364d": {
+                    "yield": 17.9,
+                    "prior_month": 26.0,
+                    "delta_bps": -810
+                  },
+                  "real_rate_364d": -7.0,
+                  "mk_usd": 1750.45
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/equities": {
+      "get": {
+        "tags": [
+          "Equities"
+        ],
+        "summary": "MSE equity prices and valuations",
+        "description": "All 16 MSE-listed equities with closing price, month-on-month change, P/E ratio, P/BV ratio, dividend yield, market cap, sector, liquidity rating, and valuation flags. Equivalent to MCP `GetStockHistory` + `GetValuationMetrics`. Monthly turnover (MK value traded and trade count) available via the `include_turnover` parameter.",
+        "operationId": "getEquities",
+        "parameters": [
+          {
+            "name": "sector",
+            "in": "query",
+            "description": "Filter by sector",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "bank",
+                "telco",
+                "agri",
+                "ins",
+                "hotel",
+                "congl",
+                "inv",
+                "prop"
+              ]
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort field",
+            "schema": {
+              "type": "string",
+              "default": "market_cap_mk_bn",
+              "enum": [
+                "mom_pct",
+                "market_cap_mk_bn",
+                "pe_ratio",
+                "pbv_ratio",
+                "div_yield_pct"
+              ]
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "description": "Sort direction",
+            "schema": {
+              "type": "string",
+              "default": "desc",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
+            "$ref": "#/components/parameters/From"
+          },
+          {
+            "$ref": "#/components/parameters/To"
+          },
+          {
+            "name": "include_turnover",
+            "in": "query",
+            "description": "Include monthly market turnover summary in response",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of equity records",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Equity"
+                  }
+                },
+                "example": [
+                  {
+                    "ticker": "FMBCH",
+                    "close": 2743.9,
+                    "prev_close": 2965.07,
+                    "mom_pct": -7.5,
+                    "pe_ratio": 57.0,
+                    "pbv_ratio": 14.2,
+                    "div_yield_pct": 0.1,
+                    "market_cap_mk_bn": 6745,
+                    "sector": "bank",
+                    "liquidity": "high",
+                    "flags": [
+                      "expensive"
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/yields": {
+      "get": {
+        "tags": [
+          "Yields"
+        ],
+        "summary": "Government securities yield curve and TB auctions",
+        "description": "Full 8-point yield curve (91-day TB through 10-year TN) with current yield, prior month, and basis point delta. Optionally includes Treasury Bill auction data (applied, awarded, acceptance rate). Equivalent to MCP `GetYieldCurveSnapshot` + `GetAuctionHistory`.",
+        "operationId": "getYields",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "description": "Week ending date for the yield curve snapshot (yyyy-MM-dd). Defaults to latest available.",
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "example": "2026-02-28"
+            }
+          },
+          {
+            "name": "compare",
+            "in": "query",
+            "description": "Second date to compare against (yyyy-MM-dd). Returns both curves side-by-side with basis point differences.",
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "example": "2026-02-06"
+            }
+          },
+          {
+            "name": "include_auctions",
+            "in": "query",
+            "description": "Include TB auction history in response",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "$ref": "#/components/parameters/From"
+          },
+          {
+            "$ref": "#/components/parameters/To"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Yield curve snapshot with optional auction data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/YieldSnapshot"
+                },
+                "example": {
+                  "week_ending": "2026-02-28",
+                  "shape": "normal",
+                  "curve": [
+                    {
+                      "tenor": "91d",
+                      "yield": 12.0,
+                      "prior_month": 15.0,
+                      "delta_bps": -300,
+                      "year_ago": 16.0
+                    },
+                    {
+                      "tenor": "182d",
+                      "yield": 15.0,
+                      "prior_month": 20.0,
+                      "delta_bps": -500,
+                      "year_ago": 20.0
+                    },
+                    {
+                      "tenor": "364d",
+                      "yield": 17.9,
+                      "prior_month": 26.0,
+                      "delta_bps": -810,
+                      "year_ago": 26.0
+                    },
+                    {
+                      "tenor": "2yr",
+                      "yield": 20.65,
+                      "prior_month": 28.75,
+                      "delta_bps": -810,
+                      "year_ago": 28.75
+                    },
+                    {
+                      "tenor": "3yr",
+                      "yield": 30.0,
+                      "prior_month": 30.0,
+                      "delta_bps": 0,
+                      "year_ago": 30.0
+                    },
+                    {
+                      "tenor": "5yr",
+                      "yield": 32.0,
+                      "prior_month": 32.0,
+                      "delta_bps": 0,
+                      "year_ago": 32.0
+                    },
+                    {
+                      "tenor": "7yr",
+                      "yield": 34.0,
+                      "prior_month": 34.0,
+                      "delta_bps": 0,
+                      "year_ago": 34.0
+                    },
+                    {
+                      "tenor": "10yr",
+                      "yield": 35.0,
+                      "prior_month": 35.0,
+                      "delta_bps": 0,
+                      "year_ago": 35.0
+                    }
+                  ],
+                  "auctions": [
+                    {
+                      "week": "20-Feb-26",
+                      "applied_mk_bn": 258.29,
+                      "awarded_mk_bn": 113.48,
+                      "acceptance_rate_pct": 44.0,
+                      "is_full_rejection": false
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/fx": {
+      "get": {
+        "tags": [
+          "FX"
+        ],
+        "summary": "Foreign exchange rates",
+        "description": "Middle (TT) opening exchange rates for MK/USD, MK/GBP, MK/EUR, MK/ZAR with buy/sell spread, month-on-month and year-on-year percentage changes, and trend classification. Equivalent to MCP `QueryIndicators` filtered to exchange_rate category.",
+        "operationId": "getFx",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/From"
+          },
+          {
+            "$ref": "#/components/parameters/To"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "FX rate array",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FxRate"
+                  }
+                },
+                "example": [
+                  {
+                    "pair": "MK/USD",
+                    "rate": 1750.45,
+                    "buy": 1749.91,
+                    "sell": 1751.0,
+                    "prev_month": 1749.55,
+                    "year_ago": 1749.65,
+                    "mom_pct": 0.05,
+                    "yoy_pct": 0.05,
+                    "trend": "stable"
+                  },
+                  {
+                    "pair": "MK/ZAR",
+                    "rate": 113.2,
+                    "buy": null,
+                    "sell": null,
+                    "prev_month": 113.67,
+                    "year_ago": 97.04,
+                    "mom_pct": -0.41,
+                    "yoy_pct": 16.65,
+                    "trend": "mk_weaker"
+                  }
+                ]
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/rates": {
+      "get": {
+        "tags": [
+          "Rates"
+        ],
+        "summary": "Interest rate dashboard",
+        "description": "All interest rates \u2014 MPR, Lombard, commercial bank reference, overnight interbank, TB yields, and the real rate (364-day TB minus Headline CPI). Includes basis point delta, budget targets, gap to target, and easing/tightening/stable status. Equivalent to MCP `ComputeRealRate` + `QueryIndicators`.",
+        "operationId": "getRates",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/From"
+          },
+          {
+            "$ref": "#/components/parameters/To"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Interest rate array",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/InterestRate"
+                  }
+                },
+                "example": [
+                  {
+                    "name": "Monetary Policy Rate",
+                    "value": 26.0,
+                    "prev": 26.0,
+                    "delta_bps": 0,
+                    "budget_target": 18.0,
+                    "gap_pp": 8.0,
+                    "status": "stable"
+                  },
+                  {
+                    "name": "TB 364d Yield",
+                    "value": 17.9,
+                    "prev": 26.0,
+                    "delta_bps": -810,
+                    "budget_target": null,
+                    "gap_pp": null,
+                    "status": "easing"
+                  },
+                  {
+                    "name": "Real Rate (364d minus CPI)",
+                    "value": -7.0,
+                    "prev": -9.9,
+                    "delta_bps": null,
+                    "budget_target": 0,
+                    "gap_pp": -7.0,
+                    "status": "negative"
+                  }
+                ]
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/macro": {
+      "get": {
+        "tags": [
+          "Macro"
+        ],
+        "summary": "Macroeconomic indicator snapshot",
+        "description": "Latest available readings for CPI components, GDP growth, fiscal deficit, current account balance, FX reserves, and commodity prices (maize, oil). Includes reference period, MoM delta, and direction classification.",
+        "operationId": "getMacro",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/From"
+          },
+          {
+            "$ref": "#/components/parameters/To"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Macro indicator array",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MacroIndicator"
+                  }
+                },
+                "example": [
+                  {
+                    "indicator": "Headline CPI",
+                    "value": 24.9,
+                    "prev": 26.0,
+                    "unit": "%",
+                    "period": "Jan 26",
+                    "mom_delta": -1.1,
+                    "direction": "improving",
+                    "budget_target": 15.0
+                  },
+                  {
+                    "indicator": "Real GDP Growth",
+                    "value": 1.9,
+                    "prev": 1.7,
+                    "unit": "%",
+                    "period": "2025E",
+                    "mom_delta": 0.2,
+                    "direction": "improving",
+                    "budget_target": null
+                  }
+                ]
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/commodities": {
+      "get": {
+        "tags": [
+          "Commodities"
+        ],
+        "summary": "Commodity prices \u2014 maize and oil",
+        "description": "Prices and values for all 14 tracked commodities across five categories: food (maize 4 variants, NFRA price, fertiliser), energy (OPEC oil, diesel imports, petrol imports, domestic fuel price), minerals (uranium, graphite, rutile), agro-processing (tobacco, soybeans, groundnuts, macadamia), and trade flows. Pending commodities return null values with status='pending' and source details. Equivalent to MCP `GetCommodityPrices`.",
+        "operationId": "getCommodities",
+        "parameters": [
+          {
+            "name": "commodity",
+            "in": "query",
+            "description": "Specific commodity key, category name, or 'all'",
+            "schema": {
+              "type": "string",
+              "default": "all",
+              "enum": [
+                "all",
+                "food",
+                "energy",
+                "minerals",
+                "agro",
+                "trade",
+                "maize_national",
+                "maize_northern",
+                "maize_central",
+                "maize_southern",
+                "maize_nfra_purchase",
+                "fertiliser_imports",
+                "oil_opec_basket",
+                "diesel_imports",
+                "petrol_imports",
+                "fuel_pump_diesel_mwk",
+                "uranium_kayelekera",
+                "graphite_kasiya",
+                "rutile_kasiya",
+                "tobacco_exports",
+                "soybeans_exports",
+                "groundnuts_exports",
+                "macadamia_exports"
+              ]
+            }
+          },
+          {
+            "name": "months",
+            "in": "query",
+            "description": "History length in months",
+            "schema": {
+              "type": "integer",
+              "default": 12,
+              "minimum": 1,
+              "maximum": 60
+            }
+          },
+          {
+            "name": "include_pending",
+            "in": "query",
+            "description": "Include commodities with no data yet (status=pending)",
+            "schema": {
+              "type": "boolean",
+              "default": true
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "description": "Filter by commodity category",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "food",
+                "energy",
+                "minerals",
+                "agro",
+                "trade"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Commodity price snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommodityResponse"
+                },
+                "example": {
+                  "commodities": [
+                    {
+                      "month": "2026-01",
+                      "commodity": "maize_national",
+                      "value": 978.0,
+                      "unit": "MK/kg",
+                      "source": "IFPRI",
+                      "category": "food",
+                      "status": "live",
+                      "change_pct": -15.8,
+                      "note": "Below NFRA farmgate min of MK1,050/kg"
+                    },
+                    {
+                      "month": "2026-02",
+                      "commodity": "uranium_kayelekera",
+                      "value": null,
+                      "unit": "klbs/mo",
+                      "source": "Lotus Resources",
+                      "category": "minerals",
+                      "status": "pending",
+                      "change_pct": null,
+                      "note": "First export Q2 2026 \u2014 target 200,000 lbs/month. USD53mn capital raised Feb 2026."
+                    },
+                    {
+                      "month": "2025-12",
+                      "commodity": "diesel_imports",
+                      "value": 43.9,
+                      "unit": "USD mn",
+                      "source": "NSO",
+                      "category": "energy",
+                      "status": "live",
+                      "change_pct": null,
+                      "note": "13.2% of total imports"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/banking": {
+      "get": {
+        "tags": [
+          "Banking"
+        ],
+        "summary": "Banking sector health metrics",
+        "description": "Sector-level banking health indicators extracted from the monthly economic report: return on equity, return on assets, non-performing loan ratio, and government securities exposure level. Context for interpreting elevated P/E multiples in the banking sector. Equivalent to MCP `GetBankingSectorMetrics`.",
+        "operationId": "getBanking",
+        "parameters": [
+          {
+            "name": "months",
+            "in": "query",
+            "description": "Number of months of history",
+            "schema": {
+              "type": "integer",
+              "default": 12
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Banking sector metrics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BankingMetrics"
+                },
+                "example": {
+                  "period": "Feb 2026",
+                  "roe_pct": 60.9,
+                  "roa_pct": 7.7,
+                  "npl_ratio_pct": 4.6,
+                  "govt_sec_exposure": "high",
+                  "note": "Highest ROE in region. Heavy govt securities exposure crowding private sector lending."
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/trade": {
+      "get": {
+        "tags": [
+          "Trade"
+        ],
+        "summary": "Trade balance",
+        "description": "Monthly trade balance data: total exports, total imports, trade deficit, export-to-import ratio, and top commodity categories for both exports and imports. Equivalent to MCP `GetTradeBalance`.",
+        "operationId": "getTrade",
+        "parameters": [
+          {
+            "name": "months",
+            "in": "query",
+            "description": "Number of months of history",
+            "schema": {
+              "type": "integer",
+              "default": 6,
+              "minimum": 1,
+              "maximum": 60
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "description": "Filter to specific flow type",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "exports",
+                "imports",
+                "deficit",
+                "all"
+              ],
+              "default": "all"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Trade balance data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TradeBalance"
+                },
+                "example": {
+                  "period": "Dec 2025",
+                  "total_exports_usd_mn": 60.9,
+                  "total_imports_usd_mn": 332.1,
+                  "trade_deficit_usd_mn": 271.2,
+                  "export_import_ratio": 0.18,
+                  "top_imports": [
+                    {
+                      "category": "fertiliser",
+                      "value_usd_mn": 44.3,
+                      "pct_of_total": 13.3
+                    },
+                    {
+                      "category": "diesel",
+                      "value_usd_mn": 43.9,
+                      "pct_of_total": 13.2
+                    },
+                    {
+                      "category": "petrol",
+                      "value_usd_mn": 35.3,
+                      "pct_of_total": 10.6
+                    }
+                  ],
+                  "top_exports": [
+                    {
+                      "category": "tobacco",
+                      "value_usd_mn": 3.9,
+                      "pct_of_total": 6.4
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/indices": {
+      "get": {
+        "tags": [
+          "Indices"
+        ],
+        "summary": "MASI, DSI, and FSI YTD returns",
+        "description": "Monthly year-to-date returns for all three MSE indices (Malawi All Share Index, Domestic Share Index, Financial Sector Index) with divergence spreads. Equivalent to MCP `GetIndexDivergence`.",
+        "operationId": "getIndices",
+        "parameters": [
+          {
+            "name": "months",
+            "in": "query",
+            "description": "Number of months of history",
+            "schema": {
+              "type": "integer",
+              "default": 13,
+              "minimum": 1,
+              "maximum": 60
+            }
+          },
+          {
+            "$ref": "#/components/parameters/From"
+          },
+          {
+            "$ref": "#/components/parameters/To"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Index YTD return array",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/IndexReturn"
+                  }
+                },
+                "example": [
+                  {
+                    "month": "2026-02",
+                    "masi_ytd": -3.91,
+                    "dsi_ytd": -0.75,
+                    "fsi_ytd": -13.69,
+                    "fsi_masi_spread": -9.78,
+                    "fsi_dsi_spread": -12.94
+                  },
+                  {
+                    "month": "2025-11",
+                    "masi_ytd": 259.98,
+                    "dsi_ytd": 217.65,
+                    "fsi_ytd": 503.79,
+                    "fsi_masi_spread": 243.81,
+                    "fsi_dsi_spread": 286.14
+                  }
+                ]
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/forecasts": {
+      "get": {
+        "tags": [
+          "Forecasts"
+        ],
+        "summary": "Per-institution macro forecasts",
+        "description": "GDP, CPI, and FX projections from EIU, World Bank, Oxford Economics, and Government (SONA/Budget) \u2014 stored per-institution so consumers can analyse disagreements across sources. Equivalent to MCP `GetInstitutionalForecasts`.",
+        "operationId": "getForecasts",
+        "parameters": [
+          {
+            "name": "indicator",
+            "in": "query",
+            "description": "Filter by indicator type",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "gdp",
+                "cpi",
+                "fx",
+                "all"
+              ],
+              "default": "all"
+            }
+          },
+          {
+            "name": "year",
+            "in": "query",
+            "description": "Forecast target year",
+            "schema": {
+              "type": "integer",
+              "example": 2026
+            }
+          },
+          {
+            "name": "institution",
+            "in": "query",
+            "description": "Filter to one institution",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "EIU",
+                "World Bank",
+                "Oxford Economics",
+                "GoM (SONA)",
+                "GoM (Budget)",
+                "all"
+              ],
+              "default": "all"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of per-institution forecast records",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/InstitutionalForecast"
+                  }
+                },
+                "example": [
+                  {
+                    "institution": "Govt (SONA)",
+                    "indicator": "gdp",
+                    "forecast_year": 2026,
+                    "value": 3.8,
+                    "unit": "%",
+                    "published_month": "2026-02",
+                    "note": "SONA address Feb 2026"
+                  },
+                  {
+                    "institution": "World Bank",
+                    "indicator": "gdp",
+                    "forecast_year": 2026,
+                    "value": 2.3,
+                    "unit": "%",
+                    "published_month": "2026-02",
+                    "note": "WB Malawi Economic Monitor"
+                  },
+                  {
+                    "institution": "Oxford Econ",
+                    "indicator": "cpi",
+                    "forecast_year": 2026,
+                    "value": 34.8,
+                    "unit": "%",
+                    "published_month": "2026-02",
+                    "note": "Oxford Economics Feb 2026"
+                  },
+                  {
+                    "institution": "EIU",
+                    "indicator": "fx",
+                    "forecast_year": 2027,
+                    "value": 2127,
+                    "unit": "MK/USD",
+                    "published_month": "2026-02",
+                    "note": "EIU average rate forecast"
+                  }
+                ]
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/export-structure": {
+      "get": {
+        "tags": [
+          "Trade"
+        ],
+        "summary": "Export structure decline \u2014 10-year series",
+        "description": "Annual export structure data and structural benchmarks from World Bank special topic analysis. Tracks decline in export value, product diversity, market reach, exporter count, and survival rates from 2003 to 2024. Equivalent to MCP `GetExportStructure`.",
+        "operationId": "getExportStructure",
+        "parameters": [
+          {
+            "name": "metric",
+            "in": "query",
+            "description": "Filter to specific metric or return all",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "trade_deficit",
+                "products",
+                "markets",
+                "exporters",
+                "benchmarks",
+                "all"
+              ],
+              "default": "all"
+            }
+          },
+          {
+            "name": "start_year",
+            "in": "query",
+            "description": "Start year for series",
+            "schema": {
+              "type": "integer",
+              "default": 2003,
+              "minimum": 2003
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Export structure series and benchmarks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportStructureResponse"
+                },
+                "example": {
+                  "series": [
+                    {
+                      "year": 2009,
+                      "trade_deficit_pct_gdp": 10.0,
+                      "num_products": 1070,
+                      "num_markets": 126,
+                      "tobacco_share_pct": 69.0
+                    },
+                    {
+                      "year": 2023,
+                      "trade_deficit_pct_gdp": 19.0,
+                      "num_products": 643,
+                      "num_markets": 104,
+                      "tobacco_share_pct": 61.0
+                    }
+                  ],
+                  "benchmarks": [
+                    {
+                      "metric": "Export value change (2014-2023)",
+                      "malawi": "-31%",
+                      "africa_avg": "+42%",
+                      "note": "Goods exports USD terms"
+                    },
+                    {
+                      "metric": "Exporters per 100k people",
+                      "malawi": "3.2",
+                      "africa_avg": "28",
+                      "note": "Structural capacity gap 8.75\u00d7"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/yields/auctions": {
+      "get": {
+        "tags": [
+          "Yields"
+        ],
+        "summary": "TB and TN auction history with avg yields and liquidity",
+        "description": "Monthly TB and Treasury Notes auction data including applied, awarded, rejection rates, average weighted yields, system liquidity, and total raised. Includes both weekly-sourced TB data and monthly-sourced TN data. Equivalent to MCP `GetAuctionHistory`.",
+        "operationId": "getAuctions",
+        "parameters": [
+          {
+            "name": "instrument",
+            "in": "query",
+            "description": "Filter by instrument",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "TB",
+                "TN",
+                "all"
+              ],
+              "default": "all"
+            }
+          },
+          {
+            "name": "months",
+            "in": "query",
+            "description": "Number of months of history",
+            "schema": {
+              "type": "integer",
+              "default": 6,
+              "minimum": 1,
+              "maximum": 36
+            }
+          },
+          {
+            "name": "rejections_only",
+            "in": "query",
+            "description": "Return only periods with full or high rejection rates",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Auction history array",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AuctionRecord"
+                  }
+                },
+                "example": [
+                  {
+                    "month": "2026-02",
+                    "instrument": "TB",
+                    "applied_mk_bn": 258.29,
+                    "awarded_mk_bn": 113.48,
+                    "rejection_rate_pct": 72.87,
+                    "is_full_rejection": false,
+                    "avg_yield_pct": 17.55,
+                    "system_liquidity_mk_bn": 620.12,
+                    "total_raised_mk_bn": 314.96
+                  },
+                  {
+                    "month": "2026-02",
+                    "instrument": "TN",
+                    "applied_mk_bn": 403.97,
+                    "awarded_mk_bn": 103.09,
+                    "rejection_rate_pct": 74.0,
+                    "is_full_rejection": false,
+                    "avg_yield_pct": 30.33,
+                    "system_liquidity_mk_bn": null,
+                    "total_raised_mk_bn": null
+                  }
+                ]
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/equities/volume": {
+      "get": {
+        "tags": [
+          "Equities"
+        ],
+        "summary": "Per-stock weekly volume breakdown",
+        "description": "Weekly trading volume split by stock, extracted from the bar charts in each weekly report. Enables concentration analysis \u2014 what % of total MSE volume did the top stocks account for, and did concentration change after events. Equivalent to MCP `GetWeeklyStockVolume`.",
+        "operationId": "getEquitiesVolume",
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "query",
+            "description": "Filter to one stock or return all",
+            "schema": {
+              "type": "string",
+              "default": "all"
+            }
+          },
+          {
+            "name": "weeks",
+            "in": "query",
+            "description": "Number of weeks of history",
+            "schema": {
+              "type": "integer",
+              "default": 8,
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Per-stock weekly volume array",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WeeklyStockVolume"
+                  }
+                },
+                "example": [
+                  {
+                    "week_ending": "2026-02-06",
+                    "ticker": "STANDARD",
+                    "value_mk_mn": 1817.1,
+                    "pct_of_weekly_total": 44.3,
+                    "rank": 1
+                  },
+                  {
+                    "week_ending": "2026-02-20",
+                    "ticker": "FDHB",
+                    "value_mk_mn": 259.2,
+                    "pct_of_weekly_total": 23.3,
+                    "rank": 1
+                  }
+                ]
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/yields/auctions/tenors": {
+      "get": {
+        "tags": [
+          "Yields"
+        ],
+        "summary": "Per-tenor TB auction breakdown",
+        "description": "TB auction applications and awards broken down by tenor (91-day, 182-day, 364-day) with each tenor's share of total applications. The duration preference shift \u2014 91-day collapsing from 22.7% to 5.8% while 182-day surged from 16.1% to 40.1% between 6 Feb and 20 Feb \u2014 is a leading indicator of market rate expectations.",
+        "operationId": "getAuctionTenors",
+        "parameters": [
+          {
+            "name": "weeks",
+            "in": "query",
+            "description": "Number of weeks of history",
+            "schema": {
+              "type": "integer",
+              "default": 8,
+              "minimum": 1
+            }
+          },
+          {
+            "name": "tenor",
+            "in": "query",
+            "description": "Filter to specific tenor",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "91-day",
+                "182-day",
+                "364-day",
+                "all"
+              ],
+              "default": "all"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Per-tenor auction breakdown array",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TenorAuctionRecord"
+                  }
+                },
+                "example": [
+                  {
+                    "week_ending": "2026-02-06",
+                    "tenor": "364-day",
+                    "applied_mk_bn": 89.07,
+                    "pct_of_total": 61.18,
+                    "awarded_mk_bn": 0,
+                    "is_full_rejection": true
+                  },
+                  {
+                    "week_ending": "2026-02-20",
+                    "tenor": "182-day",
+                    "applied_mk_bn": 103.58,
+                    "pct_of_total": 40.1,
+                    "awarded_mk_bn": 84.26,
+                    "is_full_rejection": false
+                  }
+                ]
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/data-freshness": {
+      "get": {
+        "tags": [
+          "Snapshot"
+        ],
+        "summary": "Data staleness metadata",
+        "description": "Returns the last known observation date and publication lag for each indicator. Critical for FX reserves (3-month lag \u2014 Dec/Jan/Feb show N/A in source reports) and CPI (Jan 2026 only available in weekly body text, not appendix table).",
+        "operationId": "getDataFreshness",
+        "responses": {
+          "200": {
+            "description": "Data freshness records",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DataFreshness"
+                  }
+                },
+                "example": [
+                  {
+                    "indicator_name": "FX Reserves",
+                    "last_known_date": "2025-11-30",
+                    "report_date": "2026-02-20",
+                    "lag_months": 2.7,
+                    "source_cadence": "weekly",
+                    "notes": "Dec/Jan/Feb show N/A in Appendix 1 \u2014 publication lag from RBM"
+                  },
+                  {
+                    "indicator_name": "Headline CPI",
+                    "last_known_date": "2026-01-31",
+                    "report_date": "2026-02-20",
+                    "lag_months": 0.7,
+                    "source_cadence": "weekly",
+                    "notes": "Jan 2026 value in weekly body text only, not appendix table"
+                  }
+                ]
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/commodities/milestones": {
+      "get": {
+        "tags": [
+          "Commodities"
+        ],
+        "summary": "Mineral project development milestones",
+        "description": "Event-driven milestone records for pre-revenue mineral projects (Kayelekera uranium, Kasiya graphite/rutile). Includes capital raises, offtake MOUs, first-export targets, and regulatory events. Equivalent to MCP `GetMineralMilestones`.",
+        "operationId": "getCommodityMilestones",
+        "parameters": [
+          {
+            "name": "project",
+            "in": "query",
+            "description": "Filter by project",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "kayelekera_uranium",
+                "kasiya_graphite",
+                "all"
+              ],
+              "default": "all"
+            }
+          },
+          {
+            "name": "milestone_type",
+            "in": "query",
+            "description": "Filter by milestone type",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "capital_raise",
+                "offtake_mou",
+                "first_export",
+                "production_target",
+                "regulatory",
+                "all"
+              ],
+              "default": "all"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Mineral milestone records",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MineralMilestone"
+                  }
+                },
+                "example": [
+                  {
+                    "event_date": "2026-02-01",
+                    "project": "kayelekera_uranium",
+                    "company": "Lotus Resources",
+                    "milestone_type": "capital_raise",
+                    "value_usd_mn": 53.0,
+                    "description": "Raised USD53mn via 35.4mn new shares at AUD2.15 to fund Kayelekera operational ramp-up. Infrastructure: sulphuric acid plant + national grid connection."
+                  },
+                  {
+                    "event_date": "2026-02-01",
+                    "project": "kasiya_graphite",
+                    "company": "Sovereign Metals",
+                    "milestone_type": "offtake_mou",
+                    "value_usd_mn": null,
+                    "description": "Non-binding offtake MOU with Traxys North America. Initial 40,000 MT/yr graphite concentrate (rising to 80,000 MT/yr). 6% commission."
+                  }
+                ]
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/commodities/tobacco": {
+      "get": {
+        "tags": [
+          "Commodities"
+        ],
+        "summary": "Tobacco intelligence layer \u2014 AHL, TIMB, USDA",
+        "description": "Three-layer tobacco intelligence: AHL Malawi weekly auction results (season only, April\u2013September), Zimbabwe TIMB reference price (leading indicator via shared buyer pool), and USDA FAS annual global supply/demand balance. Equivalent to MCP GetTobaccoAuction + GetTobaccoOutlook. TIMB prices flue-cured Virginia; AHL prices burley \u2014 correlated but not identical. TIMB in March\u2013April is a leading indicator for AHL prices when Lilongwe floors open. Institutional+ tier required.",
+        "operationId": "getTobacco",
+        "parameters": [
+          {
+            "name": "season",
+            "in": "query",
+            "description": "Season year (default: current)",
+            "schema": {
+              "type": "integer",
+              "example": 2026
+            }
+          },
+          {
+            "name": "weeks",
+            "in": "query",
+            "description": "Weeks of AHL/TIMB history",
+            "schema": {
+              "type": "integer",
+              "default": 8
+            }
+          },
+          {
+            "name": "include_timb",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": true
+            }
+          },
+          {
+            "name": "include_usda",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tobacco intelligence response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TobaccoResponse"
+                },
+                "example": {
+                  "season": {
+                    "year": 2026,
+                    "status": "pre_season",
+                    "floors_open_date": "2026-04-07",
+                    "ahl_ytd_volume_mt": null,
+                    "ahl_ytd_avg_price_usd": null,
+                    "timb_current_ref_usd_kg": 2.18,
+                    "outlook": "TIMB prices soft entering season \u2014 below the USD2.34 recorded at same point in 2025."
+                  },
+                  "ahl_weekly": [],
+                  "timb_weekly": [
+                    {
+                      "week_ending": "2026-02-28",
+                      "avg_price_usd_kg": 2.18,
+                      "volume_mt": 4120,
+                      "flue_cured_pct": 87.3,
+                      "basis_spread": null
+                    }
+                  ],
+                  "equity_linkages": [
+                    {
+                      "ticker": "PCL",
+                      "relationship": "direct",
+                      "note": "Tobacco value chain interests via subsidiaries"
+                    },
+                    {
+                      "ticker": "ILLOVO",
+                      "relationship": "indirect",
+                      "note": "Strong season \u2192 rural income \u2192 consumer spending on ILLOVO products"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/real-estate": {
+      "get": {
+        "tags": [
+          "RealEstate"
+        ],
+        "summary": "Rental prices and implied yields by property type and city",
+        "description": "Commercial (office Grade A/B, retail, warehouse) and residential (2-bed, 3-bed, 4-bed executive) rental prices in Blantyre and Lilongwe with implied annual yields. Most commercial leases in Malawi are USD-denominated; residential rents quoted in MK. Includes source quality flag (actual / listed / estimated). Equivalent to MCP GetRealEstatePrices. Institutional+ tier required.",
+        "operationId": "getRealEstate",
+        "parameters": [
+          {
+            "name": "city",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "blantyre",
+                "lilongwe",
+                "all"
+              ],
+              "default": "all"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "commercial",
+                "residential",
+                "all"
+              ],
+              "default": "all"
+            }
+          },
+          {
+            "name": "quarter",
+            "in": "query",
+            "description": "e.g. 2026-Q1",
+            "schema": {
+              "type": "string",
+              "example": "2026-Q1"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Real estate price records",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RealEstateRecord"
+                  }
+                },
+                "example": [
+                  {
+                    "quarter": "2026-Q1",
+                    "property_type": "office_a",
+                    "city": "blantyre",
+                    "area_tier": "cbd",
+                    "rent_value": 18.0,
+                    "rent_currency": "USD",
+                    "rent_unit": "m2_month",
+                    "occupancy_pct": null,
+                    "implied_yield_pct": 8.5,
+                    "capital_value_basis": "Agent estimate \u2014 comparable sales",
+                    "source": "Agent survey",
+                    "source_quality": "estimated"
+                  },
+                  {
+                    "quarter": "2026-Q1",
+                    "property_type": "residential_3bed",
+                    "city": "blantyre",
+                    "area_tier": "suburban",
+                    "rent_value": 350000,
+                    "rent_currency": "MK",
+                    "rent_unit": "unit_month",
+                    "occupancy_pct": null,
+                    "implied_yield_pct": 6.8,
+                    "capital_value_basis": "Agent estimate",
+                    "source": "Agent survey",
+                    "source_quality": "estimated"
+                  }
+                ]
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/cross-asset/yields": {
+      "get": {
+        "tags": [
+          "RealEstate"
+        ],
+        "summary": "Cross-asset yield comparison matrix",
+        "description": "The flagship analytical endpoint. Unified yield comparison across all trackable Malawi asset classes: government securities (all 8 tenors), listed equity earnings yields, real estate rental yields (commercial and residential), and the real rate. Enables allocation decisions that no other Malawi platform supports. Equivalent to MCP GetCrossAssetYieldMatrix. Institutional+ tier required.",
+        "operationId": "getCrossAssetYields",
+        "parameters": [
+          {
+            "name": "adjust_currency",
+            "in": "query",
+            "description": "Convert USD property yields to MK-adjusted using EIU MK/USD forecast",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "include_real_estate",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": true
+            }
+          },
+          {
+            "name": "include_equities",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cross-asset yield matrix",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrossAssetYieldResponse"
+                },
+                "example": {
+                  "as_of": "2026-02-28",
+                  "currency_base": "MK",
+                  "assets": [
+                    {
+                      "name": "364-day TB",
+                      "yield_pct": 17.9,
+                      "currency": "MK",
+                      "category": "govtsec",
+                      "risk": "sovereign"
+                    },
+                    {
+                      "name": "10-year TN",
+                      "yield_pct": 35.0,
+                      "currency": "MK",
+                      "category": "govtsec",
+                      "risk": "sovereign_duration"
+                    },
+                    {
+                      "name": "ICON (earnings)",
+                      "yield_pct": 22.9,
+                      "currency": "MK",
+                      "category": "equity",
+                      "risk": "equity_illiquid"
+                    },
+                    {
+                      "name": "MPICO (earnings)",
+                      "yield_pct": 19.11,
+                      "currency": "MK",
+                      "category": "equity",
+                      "risk": "equity_illiquid"
+                    },
+                    {
+                      "name": "Office Grade A, Blantyre",
+                      "yield_pct": 8.5,
+                      "currency": "USD",
+                      "category": "real_estate",
+                      "risk": "property_vacancy"
+                    },
+                    {
+                      "name": "Residential 3-bed, Blantyre",
+                      "yield_pct": 6.8,
+                      "currency": "MK",
+                      "category": "real_estate",
+                      "risk": "property_residential"
+                    },
+                    {
+                      "name": "Real Rate (364d-CPI)",
+                      "yield_pct": -7.0,
+                      "currency": "MK",
+                      "category": "macro",
+                      "risk": "inflation"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Api-Key",
+        "description": "API key issued per client. Include on every request."
+      }
+    },
+    "parameters": {
+      "From": {
+        "name": "from",
+        "in": "query",
+        "description": "Start date filter (yyyy-MM-dd)",
+        "schema": {
+          "type": "string",
+          "format": "date",
+          "example": "2025-02-01"
+        }
+      },
+      "To": {
+        "name": "to",
+        "in": "query",
+        "description": "End date filter (yyyy-MM-dd). Defaults to latest available.",
+        "schema": {
+          "type": "string",
+          "format": "date",
+          "example": "2026-02-28"
+        }
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "Missing or invalid API key",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "error": "Unauthorized",
+              "message": "Missing or invalid X-Api-Key header"
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Valid API key but insufficient subscription tier for this endpoint",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "error": "Forbidden",
+              "message": "Institutional tier required for /cross-asset/yields"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "Snapshot": {
+        "type": "object",
+        "description": "Latest weekly market snapshot for dashboard KPI strip",
+        "properties": {
+          "week_ending": {
+            "type": "string",
+            "format": "date"
+          },
+          "masi": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "number"
+              },
+              "ytd_pct": {
+                "type": "number"
+              },
+              "prior_year_ytd_pct": {
+                "type": "number"
+              }
+            }
+          },
+          "cpi": {
+            "type": "object",
+            "properties": {
+              "headline": {
+                "type": "number"
+              },
+              "food": {
+                "type": "number"
+              },
+              "non_food": {
+                "type": "number"
+              }
+            }
+          },
+          "mpr": {
+            "type": "number"
+          },
+          "tb_364d": {
+            "type": "object",
+            "properties": {
+              "yield": {
+                "type": "number"
+              },
+              "prior_month": {
+                "type": "number"
+              },
+              "delta_bps": {
+                "type": "number"
+              }
+            }
+          },
+          "real_rate_364d": {
+            "type": "number"
+          },
+          "mk_usd": {
+            "type": "number"
+          }
+        }
+      },
+      "Equity": {
+        "type": "object",
+        "description": "MSE listed equity with price, valuation, and classification data",
+        "properties": {
+          "ticker": {
+            "type": "string",
+            "example": "FMBCH"
+          },
+          "close": {
+            "type": "number",
+            "example": 2743.9
+          },
+          "prev_close": {
+            "type": "number",
+            "example": 2965.07
+          },
+          "mom_pct": {
+            "type": "number",
+            "example": -7.5
+          },
+          "pe_ratio": {
+            "type": "number",
+            "nullable": true,
+            "example": 57.0
+          },
+          "pbv_ratio": {
+            "type": "number",
+            "example": 14.2
+          },
+          "div_yield_pct": {
+            "type": "number",
+            "example": 0.1
+          },
+          "market_cap_mk_bn": {
+            "type": "number",
+            "example": 6745
+          },
+          "sector": {
+            "type": "string",
+            "enum": [
+              "bank",
+              "telco",
+              "agri",
+              "ins",
+              "hotel",
+              "congl",
+              "inv",
+              "prop"
+            ]
+          },
+          "liquidity": {
+            "type": "string",
+            "enum": [
+              "high",
+              "mid",
+              "thin"
+            ],
+            "description": "high = large cap actively traded, thin = illiquid \u2014 % moves may not be repeatable"
+          },
+          "flags": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "value",
+                "income",
+                "loss",
+                "expensive",
+                "thin"
+              ]
+            },
+            "description": "value=P/BV<1, income=Div>3%, loss=negative EPS, expensive=P/BV>20"
+          }
+        }
+      },
+      "YieldPoint": {
+        "type": "object",
+        "properties": {
+          "tenor": {
+            "type": "string",
+            "example": "364d"
+          },
+          "yield": {
+            "type": "number",
+            "example": 17.9
+          },
+          "prior_month": {
+            "type": "number",
+            "example": 26.0
+          },
+          "delta_bps": {
+            "type": "number",
+            "example": -810
+          },
+          "year_ago": {
+            "type": "number",
+            "example": 26.0
+          }
+        }
+      },
+      "AuctionRecord": {
+        "type": "object",
+        "properties": {
+          "month": {
+            "type": "string",
+            "example": "2026-02",
+            "description": "yyyy-MM for monthly, week date for weekly"
+          },
+          "instrument": {
+            "type": "string",
+            "enum": [
+              "TB",
+              "TN"
+            ],
+            "example": "TN"
+          },
+          "applied_mk_bn": {
+            "type": "number",
+            "example": 403.97
+          },
+          "awarded_mk_bn": {
+            "type": "number",
+            "example": 103.09
+          },
+          "rejection_rate_pct": {
+            "type": "number",
+            "example": 74.0
+          },
+          "is_full_rejection": {
+            "type": "boolean",
+            "example": false
+          },
+          "avg_yield_pct": {
+            "type": "number",
+            "nullable": true,
+            "example": 30.33,
+            "description": "Weighted average yield of awarded bids. NULL if full rejection."
+          },
+          "system_liquidity_mk_bn": {
+            "type": "number",
+            "nullable": true,
+            "example": 620.12,
+            "description": "System-wide market liquidity at month end. TB monthly only."
+          },
+          "total_raised_mk_bn": {
+            "type": "number",
+            "nullable": true,
+            "example": 314.96,
+            "description": "Combined TB + TN total raised. Monthly summary only."
+          },
+          "pct_of_total_applications": {
+            "type": "number",
+            "nullable": true,
+            "example": 61.18,
+            "description": "This tenor's share of total weekly/monthly applications. NULL for summary rows."
+          }
+        }
+      },
+      "YieldSnapshot": {
+        "type": "object",
+        "properties": {
+          "week_ending": {
+            "type": "string",
+            "format": "date"
+          },
+          "shape": {
+            "type": "string",
+            "enum": [
+              "normal",
+              "flat",
+              "inverted",
+              "humped"
+            ]
+          },
+          "curve": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/YieldPoint"
+            }
+          },
+          "auctions": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/AuctionRecord"
+            }
+          }
+        }
+      },
+      "FxRate": {
+        "type": "object",
+        "properties": {
+          "pair": {
+            "type": "string",
+            "example": "MK/USD"
+          },
+          "rate": {
+            "type": "number",
+            "example": 1750.45
+          },
+          "buy": {
+            "type": "number",
+            "nullable": true,
+            "example": 1749.91
+          },
+          "sell": {
+            "type": "number",
+            "nullable": true,
+            "example": 1751.0
+          },
+          "prev_month": {
+            "type": "number",
+            "example": 1749.55
+          },
+          "year_ago": {
+            "type": "number",
+            "example": 1749.65
+          },
+          "mom_pct": {
+            "type": "number",
+            "example": 0.05
+          },
+          "yoy_pct": {
+            "type": "number",
+            "example": 0.05
+          },
+          "trend": {
+            "type": "string",
+            "enum": [
+              "stable",
+              "mk_weaker",
+              "mk_stronger"
+            ],
+            "description": "stable = MoM move < 0.1%"
+          }
+        }
+      },
+      "InterestRate": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Monetary Policy Rate"
+          },
+          "value": {
+            "type": "number",
+            "example": 26.0
+          },
+          "prev": {
+            "type": "number",
+            "example": 26.0
+          },
+          "delta_bps": {
+            "type": "number",
+            "nullable": true,
+            "example": 0
+          },
+          "budget_target": {
+            "type": "number",
+            "nullable": true,
+            "example": 18.0
+          },
+          "gap_pp": {
+            "type": "number",
+            "nullable": true,
+            "example": 8.0
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "stable",
+              "easing",
+              "tightening",
+              "negative"
+            ],
+            "description": "easing = delta < \u221250bps, tightening = delta > +50bps, negative = real rate below zero"
+          }
+        }
+      },
+      "MacroIndicator": {
+        "type": "object",
+        "properties": {
+          "indicator": {
+            "type": "string",
+            "example": "Headline CPI"
+          },
+          "value": {
+            "type": "number",
+            "example": 24.9
+          },
+          "prev": {
+            "type": "number",
+            "example": 26.0
+          },
+          "unit": {
+            "type": "string",
+            "example": "%"
+          },
+          "period": {
+            "type": "string",
+            "example": "Jan 26"
+          },
+          "mom_delta": {
+            "type": "number",
+            "example": -1.1
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "improving",
+              "deteriorating",
+              "stable"
+            ],
+            "description": "Context-aware: falling CPI = improving, falling GDP = deteriorating"
+          },
+          "budget_target": {
+            "type": "number",
+            "nullable": true,
+            "example": 15.0
+          }
+        }
+      },
+      "MaizeRegions": {
+        "type": "object",
+        "properties": {
+          "northern": {
+            "type": "number",
+            "example": 923
+          },
+          "central": {
+            "type": "number",
+            "example": 950
+          },
+          "southern": {
+            "type": "number",
+            "example": 1022
+          }
+        }
+      },
+      "MaizePrice": {
+        "type": "object",
+        "properties": {
+          "national": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "number",
+                "example": 978
+              },
+              "unit": {
+                "type": "string",
+                "example": "MK/kg"
+              },
+              "period": {
+                "type": "string",
+                "example": "Jan 26"
+              },
+              "mom_pct": {
+                "type": "number",
+                "example": -15.8
+              },
+              "farmgate_min": {
+                "type": "number",
+                "example": 1050,
+                "description": "Government farmgate minimum price. Current price below this is a policy stress signal."
+              }
+            }
+          },
+          "regions": {
+            "$ref": "#/components/schemas/MaizeRegions"
+          }
+        }
+      },
+      "OilPrice": {
+        "type": "object",
+        "properties": {
+          "opec_basket": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "number",
+                "example": 67.9
+              },
+              "unit": {
+                "type": "string",
+                "example": "USD/bbl"
+              },
+              "period": {
+                "type": "string",
+                "example": "Feb 26"
+              },
+              "mom_pct": {
+                "type": "number",
+                "example": 9.0
+              },
+              "yoy_pct": {
+                "type": "number",
+                "example": -11.6
+              }
+            }
+          }
+        }
+      },
+      "BankingMetrics": {
+        "type": "object",
+        "description": "Sector-level banking health indicators from monthly economic reports",
+        "properties": {
+          "period": {
+            "type": "string",
+            "example": "Feb 2026"
+          },
+          "roe_pct": {
+            "type": "number",
+            "example": 60.9,
+            "description": "Return on equity. MSE banking sector among highest in Sub-Saharan Africa."
+          },
+          "roa_pct": {
+            "type": "number",
+            "example": 7.7,
+            "description": "Return on assets."
+          },
+          "npl_ratio_pct": {
+            "type": "number",
+            "example": 4.6,
+            "description": "Non-performing loan ratio."
+          },
+          "govt_sec_exposure": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "example": "high",
+            "description": "Level of banking sector exposure to government securities. High = crowding out private lending."
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      },
+      "TradeFlowItem": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string",
+            "example": "fertiliser"
+          },
+          "value_usd_mn": {
+            "type": "number",
+            "example": 44.3
+          },
+          "pct_of_total": {
+            "type": "number",
+            "example": 13.3
+          }
+        }
+      },
+      "TradeBalance": {
+        "type": "object",
+        "description": "Monthly trade balance data parsed from NSO releases in monthly economic reports",
+        "properties": {
+          "period": {
+            "type": "string",
+            "example": "Dec 2025"
+          },
+          "total_exports_usd_mn": {
+            "type": "number",
+            "example": 60.9
+          },
+          "total_imports_usd_mn": {
+            "type": "number",
+            "example": 332.1
+          },
+          "trade_deficit_usd_mn": {
+            "type": "number",
+            "example": 271.2
+          },
+          "export_import_ratio": {
+            "type": "number",
+            "example": 0.18,
+            "description": "Exports as a fraction of imports. 0.18 = exports cover 18% of imports."
+          },
+          "top_exports": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TradeFlowItem"
+            }
+          },
+          "top_imports": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TradeFlowItem"
+            }
+          }
+        }
+      },
+      "IndexReturn": {
+        "type": "object",
+        "description": "Monthly YTD returns for MSE indices with divergence spreads",
+        "properties": {
+          "month": {
+            "type": "string",
+            "example": "2026-02",
+            "description": "yyyy-MM format"
+          },
+          "masi_ytd": {
+            "type": "number",
+            "example": -3.91,
+            "description": "Malawi All Share Index year-to-date return %"
+          },
+          "dsi_ytd": {
+            "type": "number",
+            "example": -0.75,
+            "description": "Domestic Share Index year-to-date return %"
+          },
+          "fsi_ytd": {
+            "type": "number",
+            "example": -13.69,
+            "description": "Financial Sector Index year-to-date return %"
+          },
+          "fsi_masi_spread": {
+            "type": "number",
+            "example": -9.78,
+            "description": "FSI minus MASI. Negative = financials underperforming. Peaked at +243pp in Nov 2025."
+          },
+          "fsi_dsi_spread": {
+            "type": "number",
+            "example": -12.94,
+            "description": "FSI minus DSI."
+          }
+        }
+      },
+      "InstitutionalForecast": {
+        "type": "object",
+        "description": "Single per-institution macro projection",
+        "properties": {
+          "institution": {
+            "type": "string",
+            "example": "World Bank",
+            "enum": [
+              "EIU",
+              "World Bank",
+              "Oxford Economics",
+              "GoM (SONA)",
+              "GoM (Budget)"
+            ]
+          },
+          "indicator": {
+            "type": "string",
+            "enum": [
+              "gdp",
+              "cpi",
+              "fx"
+            ],
+            "example": "gdp"
+          },
+          "forecast_year": {
+            "type": "integer",
+            "example": 2026
+          },
+          "value": {
+            "type": "number",
+            "example": 2.3
+          },
+          "unit": {
+            "type": "string",
+            "example": "%"
+          },
+          "published_month": {
+            "type": "string",
+            "example": "2026-02",
+            "description": "yyyy-MM"
+          },
+          "note": {
+            "type": "string",
+            "example": "WB Malawi Economic Monitor Feb 2026"
+          }
+        }
+      },
+      "ExportStructurePoint": {
+        "type": "object",
+        "properties": {
+          "year": {
+            "type": "integer",
+            "example": 2023
+          },
+          "trade_deficit_pct_gdp": {
+            "type": "number",
+            "example": 19.0
+          },
+          "num_products": {
+            "type": "integer",
+            "nullable": true,
+            "example": 643,
+            "description": "Distinct HS export codes"
+          },
+          "num_markets": {
+            "type": "integer",
+            "nullable": true,
+            "example": 104
+          },
+          "tobacco_share_pct": {
+            "type": "number",
+            "nullable": true,
+            "example": 61.0
+          },
+          "manufactured_share_pct": {
+            "type": "number",
+            "nullable": true,
+            "example": 8.5
+          }
+        }
+      },
+      "ExportBenchmark": {
+        "type": "object",
+        "properties": {
+          "metric": {
+            "type": "string",
+            "example": "Exporters per 100k people"
+          },
+          "malawi": {
+            "type": "string",
+            "example": "3.2"
+          },
+          "africa_avg": {
+            "type": "string",
+            "example": "28"
+          },
+          "note": {
+            "type": "string",
+            "example": "Structural capacity gap 8.75\u00d7"
+          }
+        }
+      },
+      "ExportStructureResponse": {
+        "type": "object",
+        "properties": {
+          "series": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExportStructurePoint"
+            }
+          },
+          "benchmarks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExportBenchmark"
+            }
+          }
+        }
+      },
+      "MonthlyTurnover": {
+        "type": "object",
+        "description": "Monthly MSE-wide trading activity",
+        "properties": {
+          "month": {
+            "type": "string",
+            "example": "2026-02"
+          },
+          "total_trades": {
+            "type": "integer",
+            "example": 3621
+          },
+          "total_value_mk_bn": {
+            "type": "number",
+            "example": 27.88
+          },
+          "mom_value_pct": {
+            "type": "number",
+            "example": 233.0,
+            "description": "233% = MoM value increase"
+          },
+          "mom_trades_pct": {
+            "type": "number",
+            "example": -14.0
+          }
+        }
+      },
+      "WeeklyStockVolume": {
+        "type": "object",
+        "description": "Per-stock weekly trading volume from MSE weekly report bar charts",
+        "properties": {
+          "week_ending": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-02-06"
+          },
+          "ticker": {
+            "type": "string",
+            "example": "STANDARD"
+          },
+          "value_mk_mn": {
+            "type": "number",
+            "example": 1817.1,
+            "description": "Value of shares traded in MK millions"
+          },
+          "pct_of_weekly_total": {
+            "type": "number",
+            "example": 44.3,
+            "description": "Share of total MSE weekly volume. STANDARD = 44.3% on 6 Feb week."
+          },
+          "rank": {
+            "type": "integer",
+            "example": 1,
+            "description": "Volume rank within the week (1 = highest)"
+          }
+        }
+      },
+      "TenorAuctionRecord": {
+        "type": "object",
+        "description": "Per-tenor TB auction data \u2014 enables duration preference analysis",
+        "properties": {
+          "week_ending": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-02-20"
+          },
+          "tenor": {
+            "type": "string",
+            "enum": [
+              "91-day",
+              "182-day",
+              "364-day"
+            ],
+            "example": "182-day"
+          },
+          "applied_mk_bn": {
+            "type": "number",
+            "example": 103.58
+          },
+          "pct_of_total": {
+            "type": "number",
+            "example": 40.1,
+            "description": "This tenor's share of total week's applications. The key signal: 182-day surged from 16.1% to 40.1% between 6 Feb and 20 Feb."
+          },
+          "awarded_mk_bn": {
+            "type": "number",
+            "example": 84.26
+          },
+          "is_full_rejection": {
+            "type": "boolean",
+            "example": false
+          }
+        }
+      },
+      "DataFreshness": {
+        "type": "object",
+        "description": "Staleness metadata for each tracked indicator",
+        "properties": {
+          "indicator_name": {
+            "type": "string",
+            "example": "FX Reserves"
+          },
+          "last_known_date": {
+            "type": "string",
+            "format": "date",
+            "example": "2025-11-30"
+          },
+          "report_date": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-02-20"
+          },
+          "lag_months": {
+            "type": "number",
+            "example": 2.7,
+            "description": "Months between last known data and report date"
+          },
+          "source_cadence": {
+            "type": "string",
+            "enum": [
+              "weekly",
+              "monthly",
+              "quarterly"
+            ]
+          },
+          "notes": {
+            "type": "string",
+            "example": "Dec/Jan/Feb show N/A in Appendix 1 \u2014 publication lag from RBM"
+          }
+        }
+      },
+      "CommodityRecord": {
+        "type": "object",
+        "description": "Single commodity price or value record",
+        "properties": {
+          "month": {
+            "type": "string",
+            "example": "2026-01"
+          },
+          "commodity": {
+            "type": "string",
+            "example": "maize_national",
+            "description": "Commodity identifier from controlled vocabulary"
+          },
+          "value": {
+            "type": "number",
+            "nullable": true,
+            "example": 978.0,
+            "description": "Price or import/export value. NULL = pending data pipeline"
+          },
+          "unit": {
+            "type": "string",
+            "example": "MK/kg"
+          },
+          "source": {
+            "type": "string",
+            "example": "IFPRI"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "food",
+              "energy",
+              "minerals",
+              "agro",
+              "trade"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "live",
+              "pending"
+            ],
+            "description": "live = data flowing; pending = source identified, ingestion not yet active"
+          },
+          "change_pct": {
+            "type": "number",
+            "nullable": true,
+            "example": -15.8
+          },
+          "note": {
+            "type": "string",
+            "nullable": true,
+            "example": "Below NFRA farmgate min of MK1,050/kg"
+          }
+        }
+      },
+      "CommodityResponse": {
+        "type": "object",
+        "properties": {
+          "commodities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CommodityRecord"
+            }
+          }
+        }
+      },
+      "MineralMilestone": {
+        "type": "object",
+        "description": "Development milestone for a pre-revenue mineral project",
+        "properties": {
+          "event_date": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-02-01"
+          },
+          "project": {
+            "type": "string",
+            "enum": [
+              "kayelekera_uranium",
+              "kasiya_graphite"
+            ],
+            "example": "kayelekera_uranium"
+          },
+          "company": {
+            "type": "string",
+            "example": "Lotus Resources"
+          },
+          "milestone_type": {
+            "type": "string",
+            "enum": [
+              "capital_raise",
+              "offtake_mou",
+              "first_export",
+              "production_target",
+              "regulatory"
+            ],
+            "example": "capital_raise"
+          },
+          "value_usd_mn": {
+            "type": "number",
+            "nullable": true,
+            "example": 53.0,
+            "description": "Capital raise or project value where applicable"
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      },
+      "TobaccoSeasonStatus": {
+        "type": "object",
+        "properties": {
+          "year": {
+            "type": "integer",
+            "example": 2026
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pre_season",
+              "active",
+              "closed"
+            ]
+          },
+          "floors_open_date": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-04-07"
+          },
+          "ahl_ytd_volume_mt": {
+            "type": "number",
+            "nullable": true
+          },
+          "ahl_ytd_avg_price_usd": {
+            "type": "number",
+            "nullable": true
+          },
+          "ahl_ytd_value_usd_mn": {
+            "type": "number",
+            "nullable": true
+          },
+          "timb_current_ref_usd_kg": {
+            "type": "number",
+            "example": 2.18
+          },
+          "outlook": {
+            "type": "string"
+          }
+        }
+      },
+      "TobaccoAHLRecord": {
+        "type": "object",
+        "description": "AHL Malawi weekly auction result (season only)",
+        "properties": {
+          "week_ending": {
+            "type": "string",
+            "format": "date"
+          },
+          "volume_mt": {
+            "type": "number"
+          },
+          "avg_price_usd_kg": {
+            "type": "number"
+          },
+          "total_value_usd_mn": {
+            "type": "number"
+          },
+          "rejection_rate_pct": {
+            "type": "number"
+          },
+          "top_buyer": {
+            "type": "string",
+            "nullable": true
+          },
+          "cumulative_volume_mt": {
+            "type": "number"
+          },
+          "cumulative_value_usd_mn": {
+            "type": "number"
+          }
+        }
+      },
+      "TobaccoTIMBRecord": {
+        "type": "object",
+        "description": "Zimbabwe TIMB weekly reference price \u2014 leading indicator for AHL",
+        "properties": {
+          "week_ending": {
+            "type": "string",
+            "format": "date"
+          },
+          "avg_price_usd_kg": {
+            "type": "number",
+            "example": 2.18
+          },
+          "volume_mt": {
+            "type": "number"
+          },
+          "flue_cured_pct": {
+            "type": "number",
+            "description": "FCV share of weekly volume. TIMB is predominantly FCV; AHL is burley."
+          },
+          "basis_spread": {
+            "type": "number",
+            "nullable": true,
+            "description": "AHL avg minus TIMB avg \u2014 populated when both markets active simultaneously"
+          }
+        }
+      },
+      "TobaccoEquityLinkage": {
+        "type": "object",
+        "properties": {
+          "ticker": {
+            "type": "string",
+            "example": "PCL"
+          },
+          "relationship": {
+            "type": "string",
+            "enum": [
+              "direct",
+              "indirect"
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      },
+      "TobaccoResponse": {
+        "type": "object",
+        "properties": {
+          "season": {
+            "$ref": "#/components/schemas/TobaccoSeasonStatus"
+          },
+          "ahl_weekly": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TobaccoAHLRecord"
+            }
+          },
+          "timb_weekly": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TobaccoTIMBRecord"
+            }
+          },
+          "usda_global": {
+            "$ref": "#/components/schemas/TobaccoGlobalBalance",
+            "nullable": true
+          },
+          "equity_linkages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TobaccoEquityLinkage"
+            }
+          }
+        }
+      },
+      "TobaccoGlobalBalance": {
+        "type": "object",
+        "description": "USDA FAS annual global tobacco supply/demand balance",
+        "properties": {
+          "year": {
+            "type": "integer"
+          },
+          "malawi_production_mt": {
+            "type": "number"
+          },
+          "malawi_exports_mt": {
+            "type": "number"
+          },
+          "malawi_avg_export_price_usd_kg": {
+            "type": "number"
+          },
+          "world_production_mt": {
+            "type": "number"
+          },
+          "malawi_share_world_trade_pct": {
+            "type": "number"
+          }
+        }
+      },
+      "RealEstateRecord": {
+        "type": "object",
+        "description": "Rental price and implied yield for a property type and city",
+        "properties": {
+          "quarter": {
+            "type": "string",
+            "example": "2026-Q1"
+          },
+          "property_type": {
+            "type": "string",
+            "enum": [
+              "office_a",
+              "office_b",
+              "retail_prime",
+              "warehouse",
+              "residential_2bed",
+              "residential_3bed",
+              "residential_4bed"
+            ]
+          },
+          "city": {
+            "type": "string",
+            "enum": [
+              "blantyre",
+              "lilongwe",
+              "mzuzu"
+            ]
+          },
+          "area_tier": {
+            "type": "string",
+            "enum": [
+              "cbd",
+              "suburban",
+              "executive"
+            ]
+          },
+          "rent_value": {
+            "type": "number",
+            "description": "Nominal rent in rent_currency"
+          },
+          "rent_currency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "MK"
+            ]
+          },
+          "rent_unit": {
+            "type": "string",
+            "enum": [
+              "m2_month",
+              "unit_month"
+            ]
+          },
+          "occupancy_pct": {
+            "type": "number",
+            "nullable": true
+          },
+          "implied_yield_pct": {
+            "type": "number",
+            "description": "Annual rent \u00f7 estimated capital value"
+          },
+          "capital_value_basis": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "source_quality": {
+            "type": "string",
+            "enum": [
+              "actual",
+              "listed",
+              "estimated"
+            ]
+          }
+        }
+      },
+      "CrossAssetYieldItem": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "364-day TB"
+          },
+          "yield_pct": {
+            "type": "number",
+            "example": 17.9
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "MK",
+              "USD"
+            ]
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "govtsec",
+              "equity",
+              "real_estate",
+              "macro"
+            ]
+          },
+          "risk": {
+            "type": "string",
+            "example": "sovereign",
+            "description": "sovereign | sovereign_duration | equity_liquid | equity_illiquid | property_vacancy | property_residential | inflation"
+          }
+        }
+      },
+      "CrossAssetYieldResponse": {
+        "type": "object",
+        "properties": {
+          "as_of": {
+            "type": "string",
+            "format": "date"
+          },
+          "currency_base": {
+            "type": "string",
+            "example": "MK"
+          },
+          "assets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CrossAssetYieldItem"
+            }
+          }
+        }
+      }
+    }
+  }
+}
