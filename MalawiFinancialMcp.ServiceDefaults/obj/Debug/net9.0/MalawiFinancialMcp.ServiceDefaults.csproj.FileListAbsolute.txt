@@ -1,0 +1,13 @@
+/Users/liwu/RiderProjects/mw-econ-analyst/MalawiFinancialMcp.ServiceDefaults/bin/Debug/net9.0/MalawiFinancialMcp.ServiceDefaults.deps.json
+/Users/liwu/RiderProjects/mw-econ-analyst/MalawiFinancialMcp.ServiceDefaults/bin/Debug/net9.0/MalawiFinancialMcp.ServiceDefaults.dll
+/Users/liwu/RiderProjects/mw-econ-analyst/MalawiFinancialMcp.ServiceDefaults/bin/Debug/net9.0/MalawiFinancialMcp.ServiceDefaults.pdb
+/Users/liwu/RiderProjects/mw-econ-analyst/MalawiFinancialMcp.ServiceDefaults/obj/Debug/net9.0/MalawiFinancialMcp.ServiceDefaults.csproj.AssemblyReference.cache
+/Users/liwu/RiderProjects/mw-econ-analyst/MalawiFinancialMcp.ServiceDefaults/obj/Debug/net9.0/MalawiFinancialMcp.ServiceDefaults.GeneratedMSBuildEditorConfig.editorconfig
+/Users/liwu/RiderProjects/mw-econ-analyst/MalawiFinancialMcp.ServiceDefaults/obj/Debug/net9.0/MalawiFinancialMcp.ServiceDefaults.AssemblyInfoInputs.cache
+/Users/liwu/RiderProjects/mw-econ-analyst/MalawiFinancialMcp.ServiceDefaults/obj/Debug/net9.0/MalawiFinancialMcp.ServiceDefaults.AssemblyInfo.cs
+/Users/liwu/RiderProjects/mw-econ-analyst/MalawiFinancialMcp.ServiceDefaults/obj/Debug/net9.0/MalawiFinancialMcp.ServiceDefaults.csproj.CoreCompileInputs.cache
+/Users/liwu/RiderProjects/mw-econ-analyst/MalawiFinancialMcp.ServiceDefaults/obj/Debug/net9.0/MalawiFinancialMcp.ServiceDefaults.sourcelink.json
+/Users/liwu/RiderProjects/mw-econ-analyst/MalawiFinancialMcp.ServiceDefaults/obj/Debug/net9.0/MalawiFinancialMcp.ServiceDefaults.dll
+/Users/liwu/RiderProjects/mw-econ-analyst/MalawiFinancialMcp.ServiceDefaults/obj/Debug/net9.0/refint/MalawiFinancialMcp.ServiceDefaults.dll
+/Users/liwu/RiderProjects/mw-econ-analyst/MalawiFinancialMcp.ServiceDefaults/obj/Debug/net9.0/MalawiFinancialMcp.ServiceDefaults.pdb
+/Users/liwu/RiderProjects/mw-econ-analyst/MalawiFinancialMcp.ServiceDefaults/obj/Debug/net9.0/ref/MalawiFinancialMcp.ServiceDefaults.dll

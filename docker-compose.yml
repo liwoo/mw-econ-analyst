@@ -1,0 +1,19 @@
+services:
+  timescaledb:
+    image: timescale/timescaledb:latest-pg17
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: malawi_financial
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: malawi_agent
+    volumes:
+      - timescaledb_data:/var/lib/postgresql/data
+
+  docling:
+    image: ds4sd/docling-serve:latest
+    ports:
+      - "8080:5001"
+
+volumes:
+  timescaledb_data:

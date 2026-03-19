@@ -1,0 +1,12 @@
+{
+  "Version": 1,
+  "Hash": "0NZnY9pNj7jRHrdpJme6TjX4fpaaxuprrc+bYEHs4Eg=",
+  "Source": "MalawiFinancialApi",
+  "BasePath": "_content/MalawiFinancialApi",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [],
+  "Assets": [],
+  "Endpoints": []
+}

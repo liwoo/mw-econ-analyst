@@ -1,0 +1,46 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MalawiFinancialMcp", "MalawiFinancialMcp\MalawiFinancialMcp.csproj", "{32E704C1-6809-430A-8EAE-4BA65CBF52C0}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MalawiFinancialApi", "MalawiFinancialApi\MalawiFinancialApi.csproj", "{22C1D22B-48C2-4ED3-B0D0-5FC15CC90834}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MalawiFinancialMcp.Tests", "MalawiFinancialMcp.Tests\MalawiFinancialMcp.Tests.csproj", "{3CD63BEC-B620-4592-B094-670E46989555}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MalawiFinancialMcp.AppHost", "MalawiFinancialMcp.AppHost\MalawiFinancialMcp.AppHost.csproj", "{876907EB-25E4-4669-BCF0-D97A82E06192}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MalawiFinancialMcp.ServiceDefaults", "MalawiFinancialMcp.ServiceDefaults\MalawiFinancialMcp.ServiceDefaults.csproj", "{6176D655-55F3-4719-93D0-A9D5C9227479}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{32E704C1-6809-430A-8EAE-4BA65CBF52C0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{32E704C1-6809-430A-8EAE-4BA65CBF52C0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{32E704C1-6809-430A-8EAE-4BA65CBF52C0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{32E704C1-6809-430A-8EAE-4BA65CBF52C0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{22C1D22B-48C2-4ED3-B0D0-5FC15CC90834}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{22C1D22B-48C2-4ED3-B0D0-5FC15CC90834}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{22C1D22B-48C2-4ED3-B0D0-5FC15CC90834}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{22C1D22B-48C2-4ED3-B0D0-5FC15CC90834}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3CD63BEC-B620-4592-B094-670E46989555}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3CD63BEC-B620-4592-B094-670E46989555}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3CD63BEC-B620-4592-B094-670E46989555}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3CD63BEC-B620-4592-B094-670E46989555}.Release|Any CPU.Build.0 = Release|Any CPU
+		{876907EB-25E4-4669-BCF0-D97A82E06192}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{876907EB-25E4-4669-BCF0-D97A82E06192}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{876907EB-25E4-4669-BCF0-D97A82E06192}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{876907EB-25E4-4669-BCF0-D97A82E06192}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6176D655-55F3-4719-93D0-A9D5C9227479}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6176D655-55F3-4719-93D0-A9D5C9227479}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6176D655-55F3-4719-93D0-A9D5C9227479}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6176D655-55F3-4719-93D0-A9D5C9227479}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
