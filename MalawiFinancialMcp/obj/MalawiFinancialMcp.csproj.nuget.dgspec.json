@@ -142,19 +142,17 @@
         "net9.0": {
           "targetAlias": "net9.0",
           "dependencies": {
-            "Microsoft.EntityFrameworkCore.Design": {
-              "include": "Runtime, Build, Native, ContentFiles, Analyzers, BuildTransitive",
-              "suppressParent": "All",
+            "Dapper": {
               "target": "Package",
-              "version": "[9.0.4, )"
+              "version": "[2.1.35, )"
             },
             "ModelContextProtocol": {
               "target": "Package",
               "version": "[1.1.0, )"
             },
-            "Npgsql.EntityFrameworkCore.PostgreSQL": {
+            "Npgsql": {
               "target": "Package",
-              "version": "[9.0.4, )"
+              "version": "[9.0.3, )"
             }
           },
           "imports": [

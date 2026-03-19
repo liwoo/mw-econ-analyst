@@ -16,12 +16,8 @@
 /Users/liwu/RiderProjects/mw-econ-analyst/MalawiFinancialMcp.Tests/bin/Debug/net9.0/Castle.Core.dll
 /Users/liwu/RiderProjects/mw-econ-analyst/MalawiFinancialMcp.Tests/bin/Debug/net9.0/FluentAssertions.dll
 /Users/liwu/RiderProjects/mw-econ-analyst/MalawiFinancialMcp.Tests/bin/Debug/net9.0/Microsoft.VisualStudio.CodeCoverage.Shim.dll
-/Users/liwu/RiderProjects/mw-econ-analyst/MalawiFinancialMcp.Tests/bin/Debug/net9.0/Microsoft.EntityFrameworkCore.dll
-/Users/liwu/RiderProjects/mw-econ-analyst/MalawiFinancialMcp.Tests/bin/Debug/net9.0/Microsoft.EntityFrameworkCore.Abstractions.dll
-/Users/liwu/RiderProjects/mw-econ-analyst/MalawiFinancialMcp.Tests/bin/Debug/net9.0/Microsoft.EntityFrameworkCore.Relational.dll
 /Users/liwu/RiderProjects/mw-econ-analyst/MalawiFinancialMcp.Tests/bin/Debug/net9.0/Microsoft.Extensions.AI.Abstractions.dll
 /Users/liwu/RiderProjects/mw-econ-analyst/MalawiFinancialMcp.Tests/bin/Debug/net9.0/Microsoft.Extensions.Caching.Abstractions.dll
-/Users/liwu/RiderProjects/mw-econ-analyst/MalawiFinancialMcp.Tests/bin/Debug/net9.0/Microsoft.Extensions.Caching.Memory.dll
 /Users/liwu/RiderProjects/mw-econ-analyst/MalawiFinancialMcp.Tests/bin/Debug/net9.0/Microsoft.Extensions.Configuration.Abstractions.dll
 /Users/liwu/RiderProjects/mw-econ-analyst/MalawiFinancialMcp.Tests/bin/Debug/net9.0/Microsoft.Extensions.DependencyInjection.dll
 /Users/liwu/RiderProjects/mw-econ-analyst/MalawiFinancialMcp.Tests/bin/Debug/net9.0/Microsoft.Extensions.DependencyInjection.Abstractions.dll
@@ -45,7 +41,6 @@
 /Users/liwu/RiderProjects/mw-econ-analyst/MalawiFinancialMcp.Tests/bin/Debug/net9.0/Moq.dll
 /Users/liwu/RiderProjects/mw-econ-analyst/MalawiFinancialMcp.Tests/bin/Debug/net9.0/Newtonsoft.Json.dll
 /Users/liwu/RiderProjects/mw-econ-analyst/MalawiFinancialMcp.Tests/bin/Debug/net9.0/Npgsql.dll
-/Users/liwu/RiderProjects/mw-econ-analyst/MalawiFinancialMcp.Tests/bin/Debug/net9.0/Npgsql.EntityFrameworkCore.PostgreSQL.dll
 /Users/liwu/RiderProjects/mw-econ-analyst/MalawiFinancialMcp.Tests/bin/Debug/net9.0/System.Diagnostics.DiagnosticSource.dll
 /Users/liwu/RiderProjects/mw-econ-analyst/MalawiFinancialMcp.Tests/bin/Debug/net9.0/System.IO.Pipelines.dll
 /Users/liwu/RiderProjects/mw-econ-analyst/MalawiFinancialMcp.Tests/bin/Debug/net9.0/System.Net.ServerSentEvents.dll
@@ -168,3 +163,4 @@
 /Users/liwu/RiderProjects/mw-econ-analyst/MalawiFinancialMcp.Tests/bin/Debug/net9.0/Polly.RateLimiting.dll
 /Users/liwu/RiderProjects/mw-econ-analyst/MalawiFinancialMcp.Tests/bin/Debug/net9.0/MalawiFinancialMcp.ServiceDefaults.dll
 /Users/liwu/RiderProjects/mw-econ-analyst/MalawiFinancialMcp.Tests/bin/Debug/net9.0/MalawiFinancialMcp.ServiceDefaults.pdb
+/Users/liwu/RiderProjects/mw-econ-analyst/MalawiFinancialMcp.Tests/bin/Debug/net9.0/Dapper.dll

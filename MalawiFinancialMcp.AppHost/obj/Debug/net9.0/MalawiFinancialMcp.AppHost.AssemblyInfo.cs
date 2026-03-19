@@ -25,7 +25,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("MalawiFinancialMcp.AppHost")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+91834e0075ece6aacb346c634b2385af604effe9")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+3dd9e5c9d274bf3b42e4eaad98fc720e3191dbf2")]
 [assembly: System.Reflection.AssemblyProductAttribute("MalawiFinancialMcp.AppHost")]
 [assembly: System.Reflection.AssemblyTitleAttribute("MalawiFinancialMcp.AppHost")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
