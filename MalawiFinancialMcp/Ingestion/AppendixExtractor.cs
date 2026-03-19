@@ -7,7 +7,6 @@ public class AppendixExtractor
 {
     private readonly ILogger<AppendixExtractor> _logger;
 
-    // Map of known row header variations to canonical indicator names
     private static readonly Dictionary<string, (string Name, string Category, string Unit)> IndicatorMap = new(StringComparer.OrdinalIgnoreCase)
     {
         ["MK/USD"] = ("mk_usd", "exchange_rate", "MWK"),
@@ -36,7 +35,6 @@ public class AppendixExtractor
         ["FSI YTD"] = ("fsi_ytd", "equity_index", "%"),
     };
 
-    // Stock tickers
     private static readonly HashSet<string> StockTickers = new(StringComparer.OrdinalIgnoreCase)
     {
         "AIRTEL", "BHL", "FDHB", "FMBCH", "ICON", "ILLOVO", "MPICO",
@@ -49,59 +47,45 @@ public class AppendixExtractor
     {
         var indicators = new List<FinancialIndicator>();
 
-        // Find the appendix table — look for a table with many rows (30+) and 10+ columns
-        var appendixTable = FindAppendixTable(doc);
-        if (appendixTable == null)
+        var tableItem = FindAppendixTable(doc);
+        if (tableItem == null)
         {
             _logger.LogWarning("No appendix table found in document dated {Date}", reportDate);
             return indicators;
         }
 
-        // Parse column headers as month-year dates
-        var columnDates = ParseColumnDates(appendixTable, reportDate);
+        // Convert Docling's cell-based table to a simple row/col grid
+        var grid = DoclingClient.TableToGrid(tableItem);
+        if (grid.Count < 2)
+        {
+            _logger.LogWarning("Appendix table has too few rows ({Count})", grid.Count);
+            return indicators;
+        }
+
+        // Parse column headers (row 0) as month-year dates
+        var columnDates = ParseColumnDates(grid[0], reportDate);
         if (columnDates.Count == 0)
         {
             _logger.LogWarning("Could not parse column dates from appendix table");
             return indicators;
         }
 
-        // Parse each row
-        for (var rowIdx = 1; rowIdx < appendixTable.Data.Count; rowIdx++) // skip header row
+        // Parse each data row
+        for (var rowIdx = 1; rowIdx < grid.Count; rowIdx++)
         {
-            var row = appendixTable.Data[rowIdx];
+            var row = grid[rowIdx];
             if (row.Count == 0) continue;
 
             var rowHeader = row[0].Trim();
             if (string.IsNullOrWhiteSpace(rowHeader)) continue;
 
-            // Check if it's a known indicator or a stock ticker
-            (string name, string category, string unit)? mapping = null;
-
-            if (IndicatorMap.TryGetValue(rowHeader, out var map))
-                mapping = map;
-            else if (StockTickers.Contains(rowHeader))
-                mapping = (rowHeader.ToLowerInvariant(), "equity_price", "MWK");
-            else
-            {
-                // Try fuzzy matching — strip whitespace and special chars
-                var normalized = rowHeader.Replace(" ", "").Replace("-", "");
-                foreach (var (key, value) in IndicatorMap)
-                {
-                    if (key.Replace(" ", "").Replace("-", "").Equals(normalized, StringComparison.OrdinalIgnoreCase))
-                    {
-                        mapping = value;
-                        break;
-                    }
-                }
-            }
-
+            var mapping = ResolveIndicator(rowHeader);
             if (mapping == null)
             {
                 _logger.LogDebug("Unknown indicator row: {Header}", rowHeader);
                 continue;
             }
 
-            // Parse each value column
             for (var colIdx = 0; colIdx < columnDates.Count && colIdx + 1 < row.Count; colIdx++)
             {
                 var cellText = row[colIdx + 1]?.Trim() ?? "";
@@ -113,10 +97,10 @@ public class AppendixExtractor
                     indicators.Add(new FinancialIndicator
                     {
                         ReportDate = columnDates[colIdx],
-                        IndicatorName = mapping.Value.name,
+                        IndicatorName = mapping.Value.Name,
                         IndicatorValue = value,
-                        Unit = mapping.Value.unit,
-                        Category = mapping.Value.category,
+                        Unit = mapping.Value.Unit,
+                        Category = mapping.Value.Category,
                         CreatedAt = DateTime.UtcNow
                     });
                 }
@@ -127,36 +111,47 @@ public class AppendixExtractor
         return indicators;
     }
 
-    private DoclingTable? FindAppendixTable(DoclingDocument doc)
+    private static (string Name, string Category, string Unit)? ResolveIndicator(string rowHeader)
     {
-        // The appendix table is typically the largest table, with 30+ rows and 10+ columns
+        if (IndicatorMap.TryGetValue(rowHeader, out var map))
+            return map;
+        if (StockTickers.Contains(rowHeader))
+            return (rowHeader.ToLowerInvariant(), "equity_price", "MWK");
+
+        // Fuzzy match — strip whitespace and special chars
+        var normalized = rowHeader.Replace(" ", "").Replace("-", "");
+        foreach (var (key, value) in IndicatorMap)
+        {
+            if (key.Replace(" ", "").Replace("-", "").Equals(normalized, StringComparison.OrdinalIgnoreCase))
+                return value;
+        }
+
+        return null;
+    }
+
+    private DoclingTableItem? FindAppendixTable(DoclingDocument doc)
+    {
+        // The appendix table is the largest table (30+ rows, 10+ columns)
         return doc.Tables
-            .Where(t => t.Data.Count >= 20 && (t.Data.FirstOrDefault()?.Count ?? 0) >= 8)
-            .OrderByDescending(t => t.Data.Count * (t.Data.FirstOrDefault()?.Count ?? 0))
+            .Where(t => t.Data.NumRows >= 20 && t.Data.NumCols >= 8)
+            .OrderByDescending(t => t.Data.NumRows * t.Data.NumCols)
             .FirstOrDefault();
     }
 
-    private List<DateOnly> ParseColumnDates(DoclingTable table, DateOnly reportDate)
+    private List<DateOnly> ParseColumnDates(List<string> headerRow, DateOnly reportDate)
     {
-        // First row should be headers like "Jan-25", "Feb-25", etc.
         var dates = new List<DateOnly>();
-        if (table.Data.Count == 0) return dates;
-
-        var headerRow = table.Headers ?? table.Data[0];
-
         foreach (var header in headerRow.Skip(1)) // skip row header column
         {
-            if (TryParseMonthYear(header?.Trim() ?? "", reportDate.Year, out var date))
+            if (TryParseMonthYear(header?.Trim() ?? "", out var date))
                 dates.Add(date);
         }
-
         return dates;
     }
 
-    private static bool TryParseMonthYear(string text, int contextYear, out DateOnly date)
+    private static bool TryParseMonthYear(string text, out DateOnly date)
     {
         date = default;
-        // Patterns: "Jan-25", "Jan 25", "Jan-2025", "January 2025"
         var months = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
         {
             ["jan"] = 1, ["feb"] = 2, ["mar"] = 3, ["apr"] = 4,
@@ -169,7 +164,6 @@ public class AppendixExtractor
 
         var match = System.Text.RegularExpressions.Regex.Match(text, @"([A-Za-z]+)[\s\-]*(\d{2,4})");
         if (!match.Success) return false;
-
         if (!months.TryGetValue(match.Groups[1].Value, out var month)) return false;
 
         var yearStr = match.Groups[2].Value;
@@ -182,9 +176,7 @@ public class AppendixExtractor
     private static bool TryParseNumeric(string text, out double value)
     {
         value = 0;
-        // Strip commas, %, trailing whitespace
         text = text.Replace(",", "").Replace("%", "").Replace("bn", "").Trim();
-        // Handle parentheses as negative: (5.2) -> -5.2
         if (text.StartsWith('(') && text.EndsWith(')'))
             text = "-" + text[1..^1];
         return double.TryParse(text, System.Globalization.NumberStyles.Float,

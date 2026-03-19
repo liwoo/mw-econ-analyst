@@ -14,20 +14,18 @@ public class NarrativeExtractor
     {
         var events = new List<MarketEvent>();
 
-        // Get text blocks from pages 1-2
-        var narrativeBlocks = doc.TextBlocks
-            .Where(b => b.PageNumber <= 2)
-            .Select(b => b.Text.Trim())
-            .Where(t => !string.IsNullOrWhiteSpace(t) && t.Length > 30) // filter short headers
+        // Get text items from pages 1-2 via provenance
+        var narrativeTexts = doc.Texts
+            .Where(t => IsOnEarlyPages(t) && t.Text.Trim().Length > 30)
+            .Select(t => t.Text.Trim())
             .ToList();
 
-        foreach (var text in narrativeBlocks)
+        foreach (var text in narrativeTexts)
         {
-            // Split on bullet points or numbered items if present
             var items = SplitIntoItems(text);
             foreach (var item in items)
             {
-                if (item.Length < 20) continue; // too short to be meaningful
+                if (item.Length < 20) continue;
                 events.Add(new MarketEvent
                 {
                     ReportDate = reportDate,
@@ -42,9 +40,14 @@ public class NarrativeExtractor
         return events;
     }
 
+    private static bool IsOnEarlyPages(DoclingTextItem text)
+    {
+        if (text.Prov == null || text.Prov.Count == 0) return true;
+        return text.Prov.Any(p => p.PageNo <= 2);
+    }
+
     private static List<string> SplitIntoItems(string text)
     {
-        // Split on common bullet/list patterns
         var lines = text.Split(['\n', '\r'], StringSplitOptions.RemoveEmptyEntries);
         var items = new List<string>();
         var current = "";
@@ -52,12 +55,11 @@ public class NarrativeExtractor
         foreach (var line in lines)
         {
             var trimmed = line.Trim();
-            // Check if line starts a new bullet/item
-            if (Regex.IsMatch(trimmed, @"^[\u2022\-\u25AA\u25E6\d+\.]\s"))
+            if (Regex.IsMatch(trimmed, @"^[\u2022\-\u25AA\u25E6]\s|^\d+\.\s"))
             {
                 if (!string.IsNullOrWhiteSpace(current))
                     items.Add(current.Trim());
-                current = Regex.Replace(trimmed, @"^[\u2022\-\u25AA\u25E6\d+\.]\s*", "");
+                current = Regex.Replace(trimmed, @"^[\u2022\-\u25AA\u25E6]\s*|^\d+\.\s*", "");
             }
             else
             {
@@ -67,7 +69,6 @@ public class NarrativeExtractor
         if (!string.IsNullOrWhiteSpace(current))
             items.Add(current.Trim());
 
-        // If no bullet points were found, return the whole text as one item
         if (items.Count == 0 && text.Length > 30)
             items.Add(text.Trim());
 

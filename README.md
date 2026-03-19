@@ -2,7 +2,7 @@
 
 MCP server + REST API exposing Malawi's financial market data as structured tools for AI assistants. Covers equities, fixed income, FX, commodities, tobacco, real estate, and macroeconomics. Data sourced from Bridgepath Capital PDF reports and external live feeds.
 
-Built with .NET 9 and the [official MCP C# SDK](https://github.com/modelcontextprotocol/csharp-sdk). See [SPEC.md](./SPEC.md) for architecture, data sources, ingestion pipelines, and the full tool inventory.
+Built with .NET 9, [Dapper](https://github.com/DapperLib/Dapper) for data access, [TimescaleDB](https://www.timescale.com/) for time-series storage, [FastEndpoints](https://fast-endpoints.com/) for the REST API, [.NET Aspire](https://learn.microsoft.com/dotnet/aspire/) for orchestration, [Docling](https://github.com/docling-project/docling-serve) for PDF parsing, and the [official MCP C# SDK](https://github.com/modelcontextprotocol/csharp-sdk).
 
 ---
 
@@ -10,8 +10,7 @@ Built with .NET 9 and the [official MCP C# SDK](https://github.com/modelcontextp
 
 - [.NET 9 SDK](https://dotnet.microsoft.com/download)
 - Docker and Docker Compose
-- A running Docling instance (included in `docker-compose.yml`)
-- Qdrant (only required for budget PDF ingestion — optional)
+- Python 3.10+ (for the PDF scraper)
 
 ---
 
@@ -28,7 +27,8 @@ psql postgresql://postgres:malawi_agent@localhost:5432/malawi_financial \
   -f Migrations/002_AddMonthlyTables.sql \
   -f Migrations/003_AddCommodityExpansion.sql \
   -f Migrations/004_AddTobaccoTables.sql \
-  -f Migrations/005_AddRealEstateAndMinerals.sql
+  -f Migrations/005_AddRealEstateAndMinerals.sql \
+  -f Migrations/006_AddUniqueConstraints.sql
 
 dotnet restore && dotnet build
 ```
@@ -38,15 +38,22 @@ dotnet restore && dotnet build
 ## Running
 
 ```bash
-# MCP server — stdio transport (local dev, Claude Desktop)
+# All services via Aspire (recommended for local dev)
+dotnet run --project MalawiFinancialMcp.AppHost
+
+# Or run individually:
+
+# MCP server — stdio transport (Claude Desktop)
 dotnet run --project MalawiFinancialMcp -- --transport stdio
 
-# MCP server — HTTP transport (production, Claude.ai, ChatGPT, Copilot)
+# MCP server — HTTP transport (Claude.ai, ChatGPT, Copilot)
 dotnet run --project MalawiFinancialMcp -- --transport http --port 5000
 
-# REST API server (dashboard and non-AI clients)
+# REST API server (dashboard, non-AI clients)
 dotnet run --project MalawiFinancialApi -- --port 5001
 ```
+
+The Aspire dashboard provides health checks, logs, and traces for all services at `http://localhost:15888`.
 
 ---
 
@@ -57,17 +64,19 @@ dotnet run --project MalawiFinancialApi -- --port 5001
 cd scraper && pip install requests beautifulsoup4 && python scraper.py
 
 # Weekly — backfill all historical
-dotnet run -- ingest --type weekly --directory ./data/raw/weekly --backfill
+dotnet run --project MalawiFinancialMcp -- ingest --type weekly --directory ./data --backfill
 
-# Monthly — backfill all historical
-dotnet run -- ingest --type monthly --directory ./data/raw/monthly --backfill
-
-# Budget — single file
-dotnet run -- ingest --type budget \
-  --file ./data/raw/budget/malawi_budget_brief_2026_27.pdf
+# Single file
+dotnet run --project MalawiFinancialMcp -- ingest --type weekly --file "./data/january 2026/weekly/BridgepathCapital...pdf"
 ```
 
-When `AutoIngestEnabled: true` in config, PDFs dropped into `data/raw/weekly/`, `data/raw/monthly/`, or `data/raw/budget/` are automatically ingested.
+The ingestion pipeline:
+1. Discovers PDFs in `data/` (handles all filename conventions from 2020–2026)
+2. Sends each PDF to **Docling-serve** (local Docker container) for structured parsing
+3. Runs extractors: `AppendixExtractor` (40 indicators × 13 months), `NarrativeExtractor`, `AuctionExtractor`
+4. Persists to TimescaleDB via Dapper with idempotent upserts
+
+Docling results are cached as `.docling.json` alongside each PDF to avoid re-parsing on subsequent runs.
 
 ---
 
@@ -81,7 +90,7 @@ dotnet test
 
 ## Configuration
 
-All settings live in `appsettings.json`:
+All settings live in `MalawiFinancialMcp/appsettings.json`:
 
 ```json
 {
@@ -100,7 +109,7 @@ All settings live in `appsettings.json`:
 }
 ```
 
-See `appsettings.json` for the full set of options including `LiveData`, `SignalDetector`, `Correlation`, and `ApiKeys`.
+See `appsettings.json` for the full set of options including `LiveData`, `SignalDetector`, and `Correlation`.
 
 ---
 
@@ -175,21 +184,25 @@ ngrok http 5000
 ## Project Structure
 
 ```
-MalawiFinancialMcp/          ← MCP server (31 tools, 12 tool classes)
-├── Tools/                   ← McpServerToolType classes
-├── Data/Repositories/       ← Repository pattern (interface + impl per table)
-├── Data/Models/             ← Entity models
-├── Services/                ← Signal detection, BM25 search, correlation
-├── Ingestion/               ← PDF extractors + live data pipeline
-└── Migrations/              ← TimescaleDB schema (5 migration files)
+MalawiFinancialMcp/              ← MCP server (31 tools, 12 tool classes)
+├── Tools/                       ← [McpServerToolType] classes
+├── Data/
+│   ├── Models/                  ← 17 entity POCOs (Dapper-mapped)
+│   ├── Repositories/            ← 10 interface + implementation pairs
+│   └── DbConnectionFactory.cs   ← Npgsql connection factory
+├── Services/                    ← Signal detection, BM25 search, correlation
+└── Ingestion/                   ← DoclingClient, extractors, PDF date parser
 
-MalawiFinancialApi/          ← REST API (20 endpoints, tier-based access)
-├── Controllers/
-└── DTOs/
+MalawiFinancialApi/              ← REST API (20 FastEndpoints, Swagger UI)
+└── Endpoints/                   ← Feature-organized endpoint classes
 
-MalawiFinancialMcp.Tests/    ← Unit tests (tools, ingestion, services)
+MalawiFinancialMcp.AppHost/      ← Aspire orchestrator (Postgres, MCP, API)
+MalawiFinancialMcp.ServiceDefaults/ ← OpenTelemetry, health checks, resilience
+MalawiFinancialMcp.Tests/        ← Unit tests (tools, ingestion, services)
 
-scraper/                     ← Bridgepath Capital PDF scraper
+Migrations/                      ← 6 TimescaleDB SQL migrations (17 tables)
+scraper/                         ← Bridgepath Capital PDF scraper (Python)
+data/                            ← Scraped PDFs (gitignored)
 ```
 
 ---
@@ -198,10 +211,8 @@ scraper/                     ← Bridgepath Capital PDF scraper
 
 | Document | Contents |
 |---|---|
-| [SPEC.md](./SPEC.md) | Architecture, data sources, ingestion pipelines, tool inventory, roadmap |
 | [MCP.md](./MCP.md) | All 31 MCP tool definitions, DB table schemas, coverage matrix |
 | [REST.md](./REST.md) | All 20 REST endpoints, request/response shapes, tier access |
-| [FEATURE_MAP.md](./FEATURE_MAP.md) | Feature segmentation across access tiers |
 
 ---
 

@@ -1,1 +1,25 @@
 data/
+
+# .NET build artifacts
+bin/
+obj/
+
+# User-specific files
+*.user
+*.suo
+*.DotSettings.user
+
+# IDE
+.idea/
+.vs/
+.vscode/
+
+# Aspire
+.aspire/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docling cache
+*.docling.json

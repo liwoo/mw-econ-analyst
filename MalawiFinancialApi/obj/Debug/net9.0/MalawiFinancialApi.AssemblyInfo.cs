@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("MalawiFinancialApi")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+3dd9e5c9d274bf3b42e4eaad98fc720e3191dbf2")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+c6cbfb26721cda994176944b5c007bcc35dddb87")]
 [assembly: System.Reflection.AssemblyProductAttribute("MalawiFinancialApi")]
 [assembly: System.Reflection.AssemblyTitleAttribute("MalawiFinancialApi")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
